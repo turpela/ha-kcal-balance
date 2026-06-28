@@ -53,18 +53,18 @@ For each sensor you intend to use, go to:
 
 | Original (example)          | Target name                          |
 |-----------------------------|--------------------------------------|
-| `sensor.janne_calories`     | `sensor.garmin_u1_calories`          |
-| `sensor.janne_total_kcal`   | `sensor.garmin_u1_total_kcal`        |
-| `sensor.janne_steps`        | `sensor.garmin_u1_steps`             |
-| `sensor.janne_active_kcal`  | `sensor.garmin_u1_active_kcal`       |
-| `sensor.janne_bmr_kcal`     | `sensor.garmin_u1_bmr_kcal`          |
-| `sensor.janne_body_battery` | `sensor.garmin_u1_body_battery`      |
-| `sensor.janne_heart_rate`   | `sensor.garmin_u1_heart_rate`        |
-| `sensor.janne_stress`       | `sensor.garmin_u1_stress`            |
-| `sensor.janne_sleep_hours`  | `sensor.garmin_u1_sleep_hours`       |
-| `sensor.janne_sleep_score`  | `sensor.garmin_u1_sleep_score`       |
-| `sensor.janne_vo2_max`      | `sensor.garmin_u1_vo2_max`           |
-| `sensor.janne_activities`   | `sensor.garmin_u1_activities`        |
+| `sensor.joe_calories`     | `sensor.garmin_u1_calories`          |
+| `sensor.joe_total_kcal`   | `sensor.garmin_u1_total_kcal`        |
+| `sensor.joe_steps`        | `sensor.garmin_u1_steps`             |
+| `sensor.joe_active_kcal`  | `sensor.garmin_u1_active_kcal`       |
+| `sensor.joe_bmr_kcal`     | `sensor.garmin_u1_bmr_kcal`          |
+| `sensor.joe_body_battery` | `sensor.garmin_u1_body_battery`      |
+| `sensor.joe_heart_rate`   | `sensor.garmin_u1_heart_rate`        |
+| `sensor.joe_stress`       | `sensor.garmin_u1_stress`            |
+| `sensor.joe_sleep_hours`  | `sensor.garmin_u1_sleep_hours`       |
+| `sensor.joe_sleep_score`  | `sensor.garmin_u1_sleep_score`       |
+| `sensor.joe_vo2_max`      | `sensor.garmin_u1_vo2_max`           |
+| `sensor.joe_activities`   | `sensor.garmin_u1_activities`        |
 
 ### User 2 target names
 
