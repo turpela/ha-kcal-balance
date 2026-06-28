@@ -27,21 +27,21 @@ A Home Assistant project for tracking daily calorie balance across two users, ea
 | Garmin Connect  | cyberjunky/home-assistant-garmin_connect | U1, U2 |
 | FatSecret       | Custom Python REST script                | U1, U2 |
 
-### Sensor Naming Convention
+### Sensor Naming
 
-All sensors follow a consistent pattern:
+Garmin sensors use the integration's default entity IDs. With two instances, User 1 gets the base name and User 2 gets a `_2` suffix:
 
 ```
-sensor.<source>_<user>_<metric>
-
-Examples:
-  sensor.garmin_u1_total_kcal
-  sensor.garmin_u2_active_kcal
-  sensor.fatsecret_u1_calories
-  sensor.fatsecret_u2_protein
+User 1:  sensor.garmin_connect_calories
+User 2:  sensor.garmin_connect_calories_2
 ```
 
-Users are identified as `u1` and `u2` throughout — in sensor names, scripts, and config files.
+FatSecret sensors are produced by custom Python scripts and named with a user suffix:
+
+```
+sensor.fatsecret_u1_calories
+sensor.fatsecret_u2_protein
+```
 
 ---
 

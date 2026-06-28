@@ -13,6 +13,14 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.1.2] — 2026-06-28
+
+### Changed
+- `garmin/GARMIN_SETUP.md` — removed sensor renaming section; sensors now use default integration entity IDs (`sensor.garmin_connect_*` for User 1, `sensor.garmin_connect_*_2` for User 2)
+- `README.md` — updated sensor naming section to reflect default Garmin entity IDs
+
+---
+
 ## [0.1.1] — 2026-06-28
 
 ### Changed
