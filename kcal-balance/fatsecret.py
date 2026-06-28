@@ -204,6 +204,7 @@ def poll_once(users, supervisor_token):
         try:
             log.debug("[%s] Fetching FatSecret diary...", label)
             raw = fetch_entries(user["creds"])
+            log.debug("[%s] Raw response: %s", label, raw)
             totals = summarise(raw)
             log.debug("[%s] Totals: %s", label, totals)
             status = post_sensor(supervisor_token, user["entity_id"], user["friendly_name"], totals)
