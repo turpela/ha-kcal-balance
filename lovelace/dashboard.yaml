@@ -1,8 +1,12 @@
 title: Kcal Balance
 views:
-  - title: Overview
+
+  # ══════════════════════════════════════════════════════════════
+  # Daily overview
+  # ══════════════════════════════════════════════════════════════
+  - title: Today
     path: kcal-balance
-    icon: mdi:scale-balance
+    icon: mdi:food-apple
     cards:
       - type: horizontal-stack
         cards:
@@ -14,7 +18,7 @@ views:
               - type: markdown
                 content: "## 👤 User 1"
 
-              # Calories consumed vs goal
+              # Calories remaining vs goal
               - type: gauge
                 entity: sensor.kcal_u1_balance
                 name: Remaining Today
@@ -47,7 +51,7 @@ views:
                   - entity: sensor.fatsecret_u1
                     name: Consumed
                   - entity: sensor.kcal_u1_goal
-                    name: Goal
+                    name: Daily Goal
                   - type: attribute
                     entity: sensor.fatsecret_u1
                     attribute: protein
@@ -85,7 +89,6 @@ views:
               - type: markdown
                 content: "## 👤 User 2"
 
-              # Calories consumed vs goal
               - type: gauge
                 entity: sensor.kcal_u2_balance
                 name: Remaining Today
@@ -98,7 +101,6 @@ views:
                   yellow: 0
                   red: -500
 
-              # Net energy: burned − consumed
               - type: gauge
                 entity: sensor.kcal_u2_net
                 name: Net Energy (Burned − Consumed)
@@ -111,14 +113,13 @@ views:
                   yellow: -200
                   red: -500
 
-              # Calories + macros
               - type: entities
                 title: Calories & Macros
                 entities:
                   - entity: sensor.fatsecret_u2
                     name: Consumed
                   - entity: sensor.kcal_u2_goal
-                    name: Goal
+                    name: Daily Goal
                   - type: attribute
                     entity: sensor.fatsecret_u2
                     attribute: protein
@@ -135,7 +136,6 @@ views:
                     name: Carbs
                     suffix: " g"
 
-              # Garmin stats
               - type: glance
                 title: Garmin — User 2
                 columns: 4
@@ -148,3 +148,111 @@ views:
                     name: Body Battery
                   - entity: sensor.garmin_connect_sleep_score_2
                     name: Sleep
+
+  # ══════════════════════════════════════════════════════════════
+  # Weekly overview (Mon – Sun)
+  # ══════════════════════════════════════════════════════════════
+  - title: This Week
+    path: kcal-balance-week
+    icon: mdi:calendar-week
+    cards:
+      - type: horizontal-stack
+        cards:
+
+          # ── User 1 weekly ───────────────────────────────────────
+          - type: vertical-stack
+            cards:
+
+              - type: markdown
+                content: "## 👤 User 1 — This Week"
+
+              # Weekly calories remaining
+              - type: gauge
+                entity: sensor.kcal_u1_weekly_balance
+                name: Weekly Remaining
+                unit: kcal
+                min: -3500
+                max: 7000
+                needle: true
+                severity:
+                  green: 500
+                  yellow: 0
+                  red: -3500
+
+              # Weekly totals
+              - type: entities
+                title: Weekly Calories & Macros
+                entities:
+                  - entity: sensor.kcal_u1_weekly_consumed
+                    name: Consumed this week
+                  - entity: sensor.kcal_u1_weekly_goal
+                    name: Weekly goal
+                  - entity: sensor.kcal_u1_weekly_balance
+                    name: Remaining
+                  - type: attribute
+                    entity: sensor.kcal_u1_weekly_consumed
+                    attribute: protein
+                    name: Protein
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.kcal_u1_weekly_consumed
+                    attribute: fat
+                    name: Fat
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.kcal_u1_weekly_consumed
+                    attribute: carbs
+                    name: Carbs
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.kcal_u1_weekly_consumed
+                    attribute: days_tracked
+                    name: Days tracked
+
+          # ── User 2 weekly ───────────────────────────────────────
+          - type: vertical-stack
+            cards:
+
+              - type: markdown
+                content: "## 👤 User 2 — This Week"
+
+              - type: gauge
+                entity: sensor.kcal_u2_weekly_balance
+                name: Weekly Remaining
+                unit: kcal
+                min: -3500
+                max: 7000
+                needle: true
+                severity:
+                  green: 500
+                  yellow: 0
+                  red: -3500
+
+              - type: entities
+                title: Weekly Calories & Macros
+                entities:
+                  - entity: sensor.kcal_u2_weekly_consumed
+                    name: Consumed this week
+                  - entity: sensor.kcal_u2_weekly_goal
+                    name: Weekly goal
+                  - entity: sensor.kcal_u2_weekly_balance
+                    name: Remaining
+                  - type: attribute
+                    entity: sensor.kcal_u2_weekly_consumed
+                    attribute: protein
+                    name: Protein
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.kcal_u2_weekly_consumed
+                    attribute: fat
+                    name: Fat
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.kcal_u2_weekly_consumed
+                    attribute: carbs
+                    name: Carbs
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.kcal_u2_weekly_consumed
+                    attribute: days_tracked
+                    name: Days tracked

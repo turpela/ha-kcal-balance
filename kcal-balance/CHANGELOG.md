@@ -8,6 +8,22 @@ All notable changes to this project are documented here.
 
 ---
 
+## [1.3.0] — 2026-06-28
+
+### Added
+- **Weekly tracking sensors** per user: `sensor.kcal_u1_weekly_consumed`, `sensor.kcal_u1_weekly_goal`, `sensor.kcal_u1_weekly_balance` — week runs Mon–Sun Helsinki time
+- Weekly goal = daily goal × 7 (auto-computed, no extra config needed)
+- Weekly state persisted in `/data/weekly_state.json`; backfills missing days from FatSecret on startup so history is complete even if the add-on was down
+- Old daily entries purged after 14 days to keep state file small
+- **Europe/Helsinki timezone** for all date calculations — midnight reset now correct for Finnish users
+- `lovelace/dashboard.yaml` now has two views: **Today** (daily gauges) and **This Week** (weekly gauges + macros)
+
+### Changed
+- `kcal-balance/Dockerfile` — added `tzdata` Alpine package for IANA timezone database (required by `zoneinfo.ZoneInfo`)
+- `kcal-balance/config.yaml` bumped to `1.3.0`
+
+---
+
 ## [1.2.0] — 2026-06-28
 
 ### Added
