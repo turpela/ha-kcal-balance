@@ -13,6 +13,20 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.2.0] — 2026-06-28
+
+### Added
+- `fatsecret/fatsecret_auth.py` — one-time 3-legged OAuth 1.0 authorization script; outputs access token + secret to save as credentials file
+- `fatsecret/fatsecret_u1.py` — User 1 polling script; calls `food_entries.get.v2` for today, sums calories/protein/fat/carbs, prints JSON to stdout
+- `fatsecret/fatsecret_u2.py` — User 2 equivalent
+- `fatsecret/FATSECRET_SETUP.md` — full Phase 2 guide covering developer registration, one-time auth flow, HA `command_line` sensor config, and troubleshooting
+- `.gitignore` — excludes `credentials_u1.json` and `credentials_u2.json` from version control
+
+### Changed
+- `README.md` — Phase 2 marked complete
+
+---
+
 ## [0.1.2] — 2026-06-28
 
 ### Changed

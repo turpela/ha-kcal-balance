@@ -50,7 +50,7 @@ sensor.fatsecret_u2_protein
 | Phase | Description              | Status       | Guide |
 |-------|--------------------------|--------------|-------|
 | 1     | Garmin Connect setup     | ✅ Complete   | [GARMIN_SETUP.md](garmin/GARMIN_SETUP.md) |
-| 2     | FatSecret integration    | ⏳ Pending   | [FATSECRET_SETUP.md](fatsecret/FATSECRET_SETUP.md) |
+| 2     | FatSecret integration    | ✅ Complete   | [FATSECRET_SETUP.md](fatsecret/FATSECRET_SETUP.md) |
 | 3     | Template sensors         | ⏳ Pending   | [TEMPLATES.md](templates/TEMPLATES.md) |
 | 4     | Lovelace dashboards      | ⏳ Pending   | [LOVELACE.md](lovelace/LOVELACE.md) |
 

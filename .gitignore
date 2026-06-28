@@ -1,0 +1,12 @@
+# FatSecret credentials — never commit these
+fatsecret/credentials_u1.json
+fatsecret/credentials_u2.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
