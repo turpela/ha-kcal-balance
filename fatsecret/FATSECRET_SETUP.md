@@ -28,48 +28,64 @@ Each script runs on the HA host on a 5-minute poll interval and produces one sen
 ## Prerequisites
 
 - FatSecret developer account with an application registered at [platform.fatsecret.com](https://platform.fatsecret.com)
-- One consumer key + secret pair per user (each user registers their own app, or you reuse one key pair and authorize two separate user accounts)
+- One consumer key + secret pair (one app registration is enough for both users)
 - Python 3 available on the HA host (`python3 --version`)
+- SSH access to the HA host
 
 ---
 
 ## 1. Register a FatSecret Developer Application
 
-Each user needs their own consumer key and secret. If both users are comfortable sharing one app registration, one key pair can be used for both — just authorize two different FatSecret accounts.
+One app registration covers both users — you authorize two separate FatSecret accounts against the same consumer key.
 
 1. Go to [platform.fatsecret.com/register](https://platform.fatsecret.com/register) and create a developer account
 2. After registration, a **Consumer Key** and **Consumer Secret** are generated automatically
-3. Note these down — they go into the credentials files below
+3. Note these down — they go into the credentials files in step 3
 
 ---
 
-## 2. Copy Scripts to Your HA Config Directory
+## 2. Clone the Repo into HA Config
 
-Copy the entire `fatsecret/` folder to your HA config directory:
+Instead of copying files manually, clone this repo directly into your HA config directory. All scripts are then always in the right place — updates are a single `git pull`.
+
+```bash
+# SSH into your HA host, then:
+cd /config
+git clone https://github.com/<your-username>/ha-kcal-balance.git
+```
+
+The scripts are now at:
 
 ```
-/config/fatsecret/
+/config/ha-kcal-balance/fatsecret/
 ├── fatsecret_auth.py       # one-time OAuth setup
 ├── fatsecret_u1.py         # User 1 polling script
-├── fatsecret_u2.py         # User 2 polling script
-├── credentials_u1.json     # created in step 3 (not in git)
-└── credentials_u2.json     # created in step 3 (not in git)
+└── fatsecret_u2.py         # User 2 polling script
 ```
 
-> The HA config directory is typically `/config/` on HA OS / Container, or `~/.homeassistant/` on manual installs.
+Credentials files (`credentials_u1.json`, `credentials_u2.json`) are created here in step 3 and are excluded from git via `.gitignore`.
+
+### Keeping scripts up to date
+
+Whenever you push changes from GitHub Desktop, pull them on the HA host:
+
+```bash
+cd /config/ha-kcal-balance
+git pull
+```
+
+> **Tip:** Install the **Git pull** add-on from the HA add-on store to automate this on a schedule without needing SSH.
 
 ---
 
 ## 3. Authorize Each User — One-Time OAuth Flow
 
-FatSecret's food diary API uses 3-legged OAuth 1.0. Each user must authorize your app once. The result is a permanent `access_token` and `access_token_secret` stored locally.
+FatSecret's food diary API uses 3-legged OAuth 1.0. Each user must authorize your app once. The result is a permanent `access_token` and `access_token_secret` stored in a local credentials file.
 
 ### Run the auth script (User 1)
 
-On the HA host (via SSH or terminal):
-
 ```bash
-cd /config/fatsecret
+cd /config/ha-kcal-balance/fatsecret
 FS_CONSUMER_KEY=<your_key> FS_CONSUMER_SECRET=<your_secret> python3 fatsecret_auth.py
 ```
 
@@ -78,9 +94,9 @@ The script will:
 2. Print an authorization URL — open it in your browser
 3. Log in with **User 1's FatSecret account** and approve the app
 4. Enter the verification code shown on screen
-5. Print the access token and secret
+5. Print the credentials JSON
 
-Save the output as `/config/fatsecret/credentials_u1.json`:
+Save the output as `credentials_u1.json` in the same folder:
 
 ```json
 {
@@ -93,31 +109,29 @@ Save the output as `/config/fatsecret/credentials_u1.json`:
 
 ### Run the auth script (User 2)
 
-Repeat the same process but log in with **User 2's FatSecret account** when the browser opens. Save the result as `credentials_u2.json`.
+Repeat with **User 2's FatSecret account** in the browser. Save as `credentials_u2.json`.
 
-> **Access tokens do not expire.** You only need to run this once per user unless you revoke access in the FatSecret app settings.
+> **Access tokens do not expire.** This is a one-time step per user unless access is revoked in FatSecret account settings.
 
 ---
 
 ## 4. Test the Scripts
 
 ```bash
-python3 /config/fatsecret/fatsecret_u1.py
-# Expected output:
-# {"calories": 1850.0, "protein": 120.5, "fat": 65.2, "carbs": 210.3}
+python3 /config/ha-kcal-balance/fatsecret/fatsecret_u1.py
+# Expected: {"calories": 1850.0, "protein": 120.5, "fat": 65.2, "carbs": 210.3}
 
-python3 /config/fatsecret/fatsecret_u2.py
-# Expected output:
-# {"calories": 2100.0, "protein": 145.0, "fat": 72.0, "carbs": 245.0}
+python3 /config/ha-kcal-balance/fatsecret/fatsecret_u2.py
+# Expected: {"calories": 2100.0, "protein": 145.0, "fat": 72.0, "carbs": 245.0}
 ```
 
-If the diary is empty for today you'll get all zeros — that's correct. If you see an `error` key in the output, check the credentials file path and content.
+All zeros with no `error` key = diary is empty today. That's fine — log something in the app and retest.
 
 ---
 
 ## 5. Add command_line Sensors to HA
 
-Add the following to your `configuration.yaml`. Adjust the Python path if needed (`which python3` on the HA host).
+Add the following to `/config/configuration.yaml`:
 
 ```yaml
 # configuration.yaml
@@ -125,7 +139,7 @@ command_line:
   - sensor:
       name: "FatSecret U1"
       unique_id: fatsecret_u1
-      command: "python3 /config/fatsecret/fatsecret_u1.py"
+      command: "python3 /config/ha-kcal-balance/fatsecret/fatsecret_u1.py"
       scan_interval: 300
       unit_of_measurement: "kcal"
       value_template: "{{ value_json.calories }}"
@@ -138,7 +152,7 @@ command_line:
   - sensor:
       name: "FatSecret U2"
       unique_id: fatsecret_u2
-      command: "python3 /config/fatsecret/fatsecret_u2.py"
+      command: "python3 /config/ha-kcal-balance/fatsecret/fatsecret_u2.py"
       scan_interval: 300
       unit_of_measurement: "kcal"
       value_template: "{{ value_json.calories }}"
@@ -155,37 +169,38 @@ Restart Home Assistant after saving.
 
 ## 6. Verify in HA
 
-In **Developer Tools → States**, search for `fatsecret`. You should see:
+In **Developer Tools → States**, search for `fatsecret`:
 
-| Entity              | State  | Attributes                              |
-|---------------------|--------|-----------------------------------------|
-| `sensor.fatsecret_u1` | 1850 | calories: 1850, protein: 120.5, ...   |
-| `sensor.fatsecret_u2` | 2100 | calories: 2100, protein: 145.0, ...   |
+| Entity                | State | Attributes                            |
+|-----------------------|-------|---------------------------------------|
+| `sensor.fatsecret_u1` | 1850  | calories: 1850, protein: 120.5, ...  |
+| `sensor.fatsecret_u2` | 2100  | calories: 2100, protein: 145.0, ...  |
 
-In Phase 3, template sensors will expose `protein`, `fat`, and `carbs` as individual sensors using these attributes.
+Phase 3 template sensors will expose `protein`, `fat`, and `carbs` as individual sensors from these attributes.
 
 ---
 
 ## Troubleshooting
 
-**`credentials_u*.json not found`** — Make sure the files are in `/config/fatsecret/`, not a subdirectory.
+**`credentials_u*.json not found`** — Make sure the file is in `/config/ha-kcal-balance/fatsecret/`, not somewhere else.
 
-**`Invalid signature` error** — The consumer key/secret or access token is wrong. Re-run `fatsecret_auth.py`.
+**`Invalid signature` error** — Consumer key/secret or access token is wrong. Re-run `fatsecret_auth.py`.
 
-**All zeros, no error** — The FatSecret diary for today has no entries logged yet. Log something in the app and wait for the next poll.
+**All zeros, no error** — No diary entries logged today yet. Log food in the app and re-run the script.
 
-**`sensor.fatsecret_u1` shows `unavailable`** — Check HA logs. The script may be failing silently; run it manually via SSH to see the raw output.
+**`sensor.fatsecret_u1` shows `unavailable`** — Run the script manually via SSH to see the raw output and error.
 
 ---
 
 ## Phase 2 Checklist
 
 - [ ] FatSecret developer app registered (consumer key + secret obtained)
+- [ ] Repo cloned into `/config/ha-kcal-balance/`
 - [ ] `fatsecret_auth.py` run for User 1 → `credentials_u1.json` created
 - [ ] `fatsecret_auth.py` run for User 2 → `credentials_u2.json` created
-- [ ] Scripts tested manually via SSH — valid JSON output confirmed
+- [ ] Scripts tested manually — valid JSON output confirmed for both users
 - [ ] `command_line` sensors added to `configuration.yaml`
-- [ ] HA restarted — `sensor.fatsecret_u1` and `sensor.fatsecret_u2` visible with live data
+- [ ] HA restarted — `sensor.fatsecret_u1` and `sensor.fatsecret_u2` live
 
 ---
 

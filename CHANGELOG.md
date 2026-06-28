@@ -13,6 +13,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.2.1] — 2026-06-28
+
+### Changed
+- `fatsecret/FATSECRET_SETUP.md` — replaced manual file copy with `git clone` into HA config directory; all script paths updated to `/config/ha-kcal-balance/fatsecret/`; added Git pull add-on tip for automated updates
+
+---
+
 ## [0.2.0] — 2026-06-28
 
 ### Added
