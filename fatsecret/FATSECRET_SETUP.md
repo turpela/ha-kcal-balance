@@ -67,14 +67,15 @@ Credentials files (`credentials_u1.json`, `credentials_u2.json`) are created her
 
 ### Keeping scripts up to date
 
-Whenever you push changes from GitHub Desktop, pull them on the HA host:
+Add this to `configuration.yaml` once — it creates a button in HA that pulls the latest changes without needing SSH:
 
-```bash
-cd /config/ha-kcal-balance
-git pull
+```yaml
+# configuration.yaml
+shell_command:
+  update_kcal_balance: "cd /config/ha-kcal-balance && git pull"
 ```
 
-> **Tip:** Install the **Git pull** add-on from the HA add-on store to automate this on a schedule without needing SSH.
+After restarting HA, call it from **Developer Tools → Actions → shell_command.update_kcal_balance** whenever you push an update from GitHub Desktop. You can also attach it to an automation to run on a schedule.
 
 ---
 

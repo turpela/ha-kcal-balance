@@ -13,6 +13,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.2.2] — 2026-06-28
+
+### Changed
+- `fatsecret/FATSECRET_SETUP.md` — removed Git pull add-on tip (incompatible with non-HA-config repos); replaced with `shell_command.update_kcal_balance` approach so updates can be triggered from the HA UI after initial clone
+
+---
+
 ## [0.2.1] — 2026-06-28
 
 ### Changed
