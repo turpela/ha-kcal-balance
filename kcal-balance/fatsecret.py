@@ -134,10 +134,10 @@ def build_user_list(opts):
         "entity_id": "sensor.fatsecret_u1",
         "friendly_name": "FatSecret U1",
         "creds": {
-            "consumer_key":        opts["u1_consumer_key"],
-            "consumer_secret":     opts["u1_consumer_secret"],
-            "access_token":        opts["u1_access_token"],
-            "access_token_secret": opts["u1_access_token_secret"],
+            "consumer_key":        opts["u1_consumer_key"].strip(),
+            "consumer_secret":     opts["u1_consumer_secret"].strip(),
+            "access_token":        opts["u1_access_token"].strip(),
+            "access_token_secret": opts["u1_access_token_secret"].strip(),
         },
     }]
 
@@ -147,6 +147,7 @@ def build_user_list(opts):
         "access_token":        opts.get("u2_access_token", ""),
         "access_token_secret": opts.get("u2_access_token_secret", ""),
     }
+    u2_creds = {k: v.strip() for k, v in u2_creds.items()}
     if all(u2_creds.values()):
         users.append({
             "label": "U2",
