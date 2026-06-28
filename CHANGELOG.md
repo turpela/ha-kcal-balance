@@ -13,6 +13,19 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.1.1] — 2026-06-28
+
+### Changed
+- `garmin/GARMIN_SETUP.md` updated for integration v3.0:
+  - Corrected scan interval: default 300 s (5 min), minimum 60 s — configured via UI, not `configuration.yaml`
+  - Updated default entity ID pattern to `sensor.garmin_connect_[sensor_name]`
+  - Expanded sensor rename tables to include all calorie, activity, and wellness sensors
+  - Corrected activities attribute name to `last_activities` on `sensor.garmin_connect_last_activities`
+  - Added 8-coordinator data update table
+  - Added v3.0 re-authentication note
+
+---
+
 ## [0.1.0] — 2026-06-28
 
 ### Added
