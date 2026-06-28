@@ -13,6 +13,19 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.3.4] — 2026-06-28
+
+### Fixed
+- `kcal-balance/fatsecret.py` — replaced hand-rolled OAuth 1.0 HMAC-SHA1 signing with `requests-oauthlib`; fixes "Invalid signature" (error code 8) from FatSecret API
+- `fatsecret/fatsecret_auth.py` — same replacement; ensures auth tokens obtained locally are valid
+- `kcal-balance/config.yaml` bumped to `1.0.5`
+- FatSecret API errors now raised as exceptions instead of silently returning zeros
+
+### Changed
+- `kcal-balance/Dockerfile` — added `pip install requests requests-oauthlib`
+
+---
+
 ## [0.3.3] — 2026-06-28
 
 ### Fixed

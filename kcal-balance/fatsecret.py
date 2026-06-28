@@ -11,23 +11,19 @@ Sensors created:
   sensor.fatsecret_u2  — same (only if U2 credentials are configured)
 """
 
-import base64
-import hashlib
-import hmac
 import json
 import logging
 import os
-import random
-import string
 import sys
 import time
-import urllib.error
-import urllib.parse
 import urllib.request
 from datetime import date
 
+import requests
+from requests_oauthlib import OAuth1
+
 # ---------------------------------------------------------------------------
-# Logging — Python -u flag (unbuffered) ensures lines appear in HA log live
+# Logging
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     stream=sys.stdout,
@@ -43,64 +39,34 @@ OPTIONS_FILE = "/data/options.json"
 
 
 # ---------------------------------------------------------------------------
-# OAuth 1.0 helpers (stdlib only)
-# ---------------------------------------------------------------------------
-
-def _nonce():
-    return "".join(random.choices(string.ascii_lowercase + string.digits, k=16))
-
-
-def _sign(method, url, params, consumer_secret, token_secret=""):
-    sorted_params = sorted(params.items())
-    param_string = "&".join(
-        f"{urllib.parse.quote(str(k), safe='')}={urllib.parse.quote(str(v), safe='')}"
-        for k, v in sorted_params
-    )
-    base_string = "&".join([
-        method.upper(),
-        urllib.parse.quote(url, safe=""),
-        urllib.parse.quote(param_string, safe=""),
-    ])
-    signing_key = (
-        f"{urllib.parse.quote(consumer_secret, safe='')}"
-        f"&{urllib.parse.quote(token_secret, safe='')}"
-    )
-    sig = hmac.new(
-        signing_key.encode("ascii"),
-        base_string.encode("ascii"),
-        hashlib.sha1,
-    ).digest()
-    return base64.b64encode(sig).decode()
-
-
-# ---------------------------------------------------------------------------
 # FatSecret API
 # ---------------------------------------------------------------------------
 
 def fetch_entries(creds):
     today_int = (date.today() - date(1970, 1, 1)).days
-    params = {
-        "method": "food_entries.get.v2",
-        "date": str(today_int),
-        "format": "json",
-        "oauth_consumer_key": creds["consumer_key"],
-        "oauth_nonce": _nonce(),
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_token": creds["access_token"],
-        "oauth_version": "1.0",
-    }
-    params["oauth_signature"] = _sign(
-        "POST", FATSECRET_API, params,
-        creds["consumer_secret"], creds["access_token_secret"]
+    auth = OAuth1(
+        creds["consumer_key"],
+        creds["consumer_secret"],
+        creds["access_token"],
+        creds["access_token_secret"],
     )
-    data = urllib.parse.urlencode(params).encode()
-    req = urllib.request.Request(FATSECRET_API, data=data, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode())
+    resp = requests.post(
+        FATSECRET_API,
+        data={
+            "method": "food_entries.get.v2",
+            "date": str(today_int),
+            "format": "json",
+        },
+        auth=auth,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def summarise(raw):
+    if "error" in raw:
+        raise RuntimeError(f"FatSecret error {raw['error']['code']}: {raw['error']['message']}")
     entries = raw.get("food_entries", {}).get("food_entry", [])
     if isinstance(entries, dict):
         entries = [entries]  # single entry is returned as dict, not list
@@ -138,8 +104,8 @@ def post_sensor(supervisor_token, entity_id, friendly_name, totals):
             "Content-Type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return resp.status
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return r.status
 
 
 # ---------------------------------------------------------------------------
@@ -162,10 +128,7 @@ def load_config():
 
 
 def build_user_list(opts):
-    users = []
-
-    # User 1 — required
-    users.append({
+    users = [{
         "label": "U1",
         "entity_id": "sensor.fatsecret_u1",
         "friendly_name": "FatSecret U1",
@@ -175,9 +138,8 @@ def build_user_list(opts):
             "access_token":        opts["u1_access_token"],
             "access_token_secret": opts["u1_access_token_secret"],
         },
-    })
+    }]
 
-    # User 2 — optional
     u2_creds = {
         "consumer_key":        opts.get("u2_consumer_key", ""),
         "consumer_secret":     opts.get("u2_consumer_secret", ""),
@@ -209,10 +171,12 @@ def poll_once(users, supervisor_token):
             log.debug("[%s] Totals: %s", label, totals)
             status = post_sensor(supervisor_token, user["entity_id"], user["friendly_name"], totals)
             log.info("[%s] %s → HA %s", label, totals, status)
-        except urllib.error.HTTPError as exc:
-            log.error("[%s] HTTP %s from %s: %s", label, exc.code, exc.url, exc.reason)
-        except urllib.error.URLError as exc:
-            log.error("[%s] Network error: %s", label, exc.reason)
+        except RuntimeError as exc:
+            log.error("[%s] %s", label, exc)
+        except requests.HTTPError as exc:
+            log.error("[%s] HTTP %s: %s", label, exc.response.status_code, exc.response.text)
+        except requests.RequestException as exc:
+            log.error("[%s] Network error: %s", label, exc)
         except Exception as exc:
             log.exception("[%s] Unexpected error: %s", label, exc)
 

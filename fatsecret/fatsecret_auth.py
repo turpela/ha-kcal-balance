@@ -2,123 +2,88 @@
 """
 FatSecret OAuth 1.0 — one-time authorization script.
 
-Run this once per user to obtain a permanent access token and secret.
-Store the output in fatsecret/credentials_u1.json or credentials_u2.json.
+Run this once per user on your local machine to obtain a permanent
+access token and secret. Paste the output into the add-on config UI.
+
+Requirements:
+    pip install requests requests-oauthlib
 
 Usage:
-    FS_CONSUMER_KEY=<key> FS_CONSUMER_SECRET=<secret> python3 fatsecret_auth.py
+    python3 fatsecret_auth.py
 """
 
-import base64
-import hashlib
-import hmac
-import json
-import os
-import random
-import string
-import time
+import sys
 import urllib.parse
-import urllib.request
 
-CONSUMER_KEY = os.environ.get("FS_CONSUMER_KEY", "")
-CONSUMER_SECRET = os.environ.get("FS_CONSUMER_SECRET", "")
+try:
+    import requests
+    from requests_oauthlib import OAuth1
+except ImportError:
+    print("ERROR: Install dependencies first:  pip install requests requests-oauthlib")
+    sys.exit(1)
 
 REQUEST_TOKEN_URL = "https://authentication.fatsecret.com/oauth/request_token"
-AUTHORIZE_URL = "https://authentication.fatsecret.com/oauth/authorize"
-ACCESS_TOKEN_URL = "https://authentication.fatsecret.com/oauth/access_token"
+AUTHORIZE_URL     = "https://authentication.fatsecret.com/oauth/authorize"
+ACCESS_TOKEN_URL  = "https://authentication.fatsecret.com/oauth/access_token"
 
 
-def _nonce():
-    return "".join(random.choices(string.ascii_lowercase + string.digits, k=16))
-
-
-def _sign(method, url, params, consumer_secret, token_secret=""):
-    sorted_params = sorted(params.items())
-    param_string = "&".join(
-        f"{urllib.parse.quote(str(k), safe='')}={urllib.parse.quote(str(v), safe='')}"
-        for k, v in sorted_params
+def post_oauth(url, consumer_key, consumer_secret, token=None, token_secret=None, extra=None):
+    """POST with OAuth 1.0 params in the request body (signature_type='body')."""
+    auth = OAuth1(
+        consumer_key,
+        client_secret=consumer_secret,
+        resource_owner_key=token or "",
+        resource_owner_secret=token_secret or "",
+        signature_type="body",
+        callback_uri="oob" if not token else None,
     )
-    base_string = "&".join([
-        method.upper(),
-        urllib.parse.quote(url, safe=""),
-        urllib.parse.quote(param_string, safe=""),
-    ])
-    signing_key = (
-        f"{urllib.parse.quote(consumer_secret, safe='')}"
-        f"&{urllib.parse.quote(token_secret, safe='')}"
-    )
-    sig = hmac.new(
-        signing_key.encode("ascii"),
-        base_string.encode("ascii"),
-        hashlib.sha1,
-    ).digest()
-    return base64.b64encode(sig).decode()
-
-
-def _post(url, params):
-    data = urllib.parse.urlencode(params).encode()
-    req = urllib.request.Request(url, data=data, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return dict(urllib.parse.parse_qsl(resp.read().decode()))
-
-
-def step1_get_request_token():
-    params = {
-        "oauth_callback": "oob",
-        "oauth_consumer_key": CONSUMER_KEY,
-        "oauth_nonce": _nonce(),
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_version": "1.0",
-    }
-    params["oauth_signature"] = _sign("POST", REQUEST_TOKEN_URL, params, CONSUMER_SECRET)
-    result = _post(REQUEST_TOKEN_URL, params)
-    return result["oauth_token"], result["oauth_token_secret"]
-
-
-def step3_get_access_token(request_token, request_token_secret, verifier):
-    params = {
-        "oauth_consumer_key": CONSUMER_KEY,
-        "oauth_nonce": _nonce(),
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_token": request_token,
-        "oauth_verifier": verifier,
-        "oauth_version": "1.0",
-    }
-    params["oauth_signature"] = _sign(
-        "POST", ACCESS_TOKEN_URL, params, CONSUMER_SECRET, request_token_secret
-    )
-    result = _post(ACCESS_TOKEN_URL, params)
-    return result["oauth_token"], result["oauth_token_secret"]
+    data = extra or {}
+    resp = requests.post(url, data=data, auth=auth)
+    if not resp.ok:
+        print(f"\nERROR: HTTP {resp.status_code} — {resp.text}")
+        sys.exit(1)
+    return dict(urllib.parse.parse_qsl(resp.text))
 
 
 def main():
-    if not CONSUMER_KEY or not CONSUMER_SECRET:
-        print("ERROR: Set FS_CONSUMER_KEY and FS_CONSUMER_SECRET environment variables.")
-        raise SystemExit(1)
+    print("=== FatSecret OAuth Setup ===\n")
+    consumer_key    = input("Consumer Key:    ").strip()
+    consumer_secret = input("Consumer Secret: ").strip()
 
-    print("Step 1: Obtaining request token...")
-    request_token, request_token_secret = step1_get_request_token()
+    if not consumer_key or not consumer_secret:
+        print("ERROR: Consumer key and secret cannot be empty.")
+        sys.exit(1)
 
+    # Step 1 — get request token
+    print("\nStep 1: Obtaining request token...")
+    token_resp = post_oauth(REQUEST_TOKEN_URL, consumer_key, consumer_secret)
+    request_token        = token_resp["oauth_token"]
+    request_token_secret = token_resp["oauth_token_secret"]
+    print("  OK")
+
+    # Step 2 — user authorizes in browser
     auth_url = f"{AUTHORIZE_URL}?oauth_token={request_token}"
-    print(f"\nStep 2: Open this URL in your browser and authorize the app:\n\n  {auth_url}\n")
+    print(f"\nStep 2: Open this URL in your browser and log in with the user's FatSecret account:\n\n  {auth_url}\n")
     verifier = input("Step 3: Enter the verification code shown after authorization: ").strip()
 
+    # Step 3 — exchange for access token
     print("\nExchanging for access token...")
-    access_token, access_token_secret = step3_get_access_token(
-        request_token, request_token_secret, verifier
+    access_resp = post_oauth(
+        ACCESS_TOKEN_URL,
+        consumer_key,
+        consumer_secret,
+        token=request_token,
+        token_secret=request_token_secret,
+        extra={"oauth_verifier": verifier},
     )
+    access_token        = access_resp["oauth_token"]
+    access_token_secret = access_resp["oauth_token_secret"]
 
-    credentials = {
-        "consumer_key": CONSUMER_KEY,
-        "consumer_secret": CONSUMER_SECRET,
-        "access_token": access_token,
-        "access_token_secret": access_token_secret,
-    }
-
-    print("\nSuccess! Save these credentials to your credentials file:\n")
-    print(json.dumps(credentials, indent=2))
+    print("\nSuccess! Enter these values in the add-on Configuration tab:\n")
+    print(f"  u1_consumer_key:        {consumer_key}")
+    print(f"  u1_consumer_secret:     {consumer_secret}")
+    print(f"  u1_access_token:        {access_token}")
+    print(f"  u1_access_token_secret: {access_token_secret}")
 
 
 if __name__ == "__main__":
