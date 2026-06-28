@@ -36,11 +36,11 @@ User 1:  sensor.garmin_connect_calories
 User 2:  sensor.garmin_connect_calories_2
 ```
 
-FatSecret sensors are produced by custom Python scripts and named with a user suffix:
+FatSecret sensors are created by the Kcal Balance add-on and pushed directly into HA:
 
 ```
-sensor.fatsecret_u1_calories
-sensor.fatsecret_u2_protein
+sensor.fatsecret_u1   (state = calories, attributes: protein, fat, carbs)
+sensor.fatsecret_u2
 ```
 
 ---
@@ -60,19 +60,25 @@ sensor.fatsecret_u2_protein
 
 ```
 ha-kcal-balance/
+├── repository.yaml                # HA add-on repository marker
+├── kcal-balance/                  # Kcal Balance add-on
+│   ├── config.yaml                #   add-on metadata & config schema
+│   ├── build.yaml                 #   multi-arch base images
+│   ├── Dockerfile
+│   ├── run.sh                     #   entrypoint
+│   └── fatsecret.py               #   FatSecret poller → HA REST API
 ├── garmin/
-│   └── GARMIN_SETUP.md        # Phase 1: Garmin HACS integration guide
+│   └── GARMIN_SETUP.md            # Phase 1: Garmin HACS integration guide
 ├── fatsecret/
-│   ├── FATSECRET_SETUP.md     # Phase 2: FatSecret integration guide
-│   ├── fatsecret_u1.py        # FatSecret polling script — User 1
-│   └── fatsecret_u2.py        # FatSecret polling script — User 2
+│   ├── FATSECRET_SETUP.md         # Phase 2: FatSecret add-on setup guide
+│   └── fatsecret_auth.py          # one-time OAuth token helper (run locally)
 ├── templates/
-│   ├── TEMPLATES.md           # Phase 3: Template sensor guide
-│   └── sensors.yaml           # Template sensor definitions
+│   ├── TEMPLATES.md               # Phase 3: Template sensor guide
+│   └── sensors.yaml               # Template sensor definitions
 ├── lovelace/
-│   ├── LOVELACE.md            # Phase 4: Dashboard guide
-│   ├── dashboard_u1.yaml      # User 1 dashboard
-│   └── dashboard_u2.yaml      # User 2 dashboard
+│   ├── LOVELACE.md                # Phase 4: Dashboard guide
+│   ├── dashboard_u1.yaml          # User 1 dashboard
+│   └── dashboard_u2.yaml          # User 2 dashboard
 ├── README.md
 └── CHANGELOG.md
 ```

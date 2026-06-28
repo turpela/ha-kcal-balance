@@ -13,6 +13,25 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.3.0] — 2026-06-28
+
+### Added
+- `repository.yaml` — marks repo as an HA add-on repository; the URL can now be added directly to the HA add-on store
+- `kcal-balance/config.yaml` — add-on metadata, config schema (both users' OAuth credentials + scan interval)
+- `kcal-balance/build.yaml` — multi-arch base images (aarch64, amd64, armhf, armv7, i386)
+- `kcal-balance/Dockerfile` — Alpine base + Python 3
+- `kcal-balance/run.sh` — bashio entrypoint
+- `kcal-balance/fatsecret.py` — polls FatSecret `food_entries.get.v2` for both users, pushes sensor states to HA via Supervisor REST API; no `configuration.yaml` edits needed
+
+### Changed
+- `fatsecret/FATSECRET_SETUP.md` — rewritten for add-on flow: add repo → install → fill config UI → start
+- `README.md` — updated repo structure and sensor naming sections
+
+### Removed
+- `fatsecret/fatsecret_u1.py`, `fatsecret/fatsecret_u2.py` — superseded by `kcal-balance/fatsecret.py`
+
+---
+
 ## [0.2.2] — 2026-06-28
 
 ### Changed

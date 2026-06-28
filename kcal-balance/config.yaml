@@ -1,0 +1,34 @@
+name: "Kcal Balance"
+version: "1.0.0"
+slug: "kcal_balance"
+description: "Daily calorie balance tracker — FatSecret food diary for two users"
+url: "https://github.com/turpela/ha-kcal-balance"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: application
+boot: auto
+homeassistant_api: true
+options:
+  u1_consumer_key: ""
+  u1_consumer_secret: ""
+  u1_access_token: ""
+  u1_access_token_secret: ""
+  u2_consumer_key: ""
+  u2_consumer_secret: ""
+  u2_access_token: ""
+  u2_access_token_secret: ""
+  scan_interval: 300
+schema:
+  u1_consumer_key: str
+  u1_consumer_secret: str
+  u1_access_token: str
+  u1_access_token_secret: str
+  u2_consumer_key: str
+  u2_consumer_secret: str
+  u2_access_token: str
+  u2_access_token_secret: str
+  scan_interval: int
