@@ -1,5 +1,5 @@
 name: "Kcal Balance"
-version: "1.0.6"
+version: "1.0.7"
 slug: "kcal_balance"
 description: "Daily calorie balance tracker — FatSecret food diary for two users"
 url: "https://github.com/turpela/ha-kcal-balance"

@@ -49,11 +49,11 @@ def fetch_entries(creds):
         creds["consumer_secret"],
         creds["access_token"],
         creds["access_token_secret"],
-        signature_type="body",
+        signature_type="query",
     )
     resp = requests.post(
         FATSECRET_API,
-        data={
+        params={
             "method": "food_entries.get.v2",
             "date": str(today_int),
             "format": "json",
