@@ -6,8 +6,13 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-### Planned
-- Phase 4: Per-user Lovelace dashboards
+---
+
+## [1.2.0] — 2026-06-28
+
+### Added
+- `lovelace/dashboard.yaml` — two-column Lovelace dashboard (U1 + U2 side by side); gauges for balance and net energy, macros breakdown, Garmin stats; no HACS custom cards required
+- `lovelace/LOVELACE_SETUP.md` — step-by-step guide for adding the dashboard to HA
 
 ---
 

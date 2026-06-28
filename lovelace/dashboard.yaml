@@ -1,0 +1,150 @@
+title: Kcal Balance
+views:
+  - title: Overview
+    path: kcal-balance
+    icon: mdi:scale-balance
+    cards:
+      - type: horizontal-stack
+        cards:
+
+          # ── User 1 ──────────────────────────────────────────────
+          - type: vertical-stack
+            cards:
+
+              - type: markdown
+                content: "## 👤 User 1"
+
+              # Calories consumed vs goal
+              - type: gauge
+                entity: sensor.kcal_u1_balance
+                name: Remaining Today
+                unit: kcal
+                min: -500
+                max: 1000
+                needle: true
+                severity:
+                  green: 100
+                  yellow: 0
+                  red: -500
+
+              # Net energy: burned − consumed
+              - type: gauge
+                entity: sensor.kcal_u1_net
+                name: Net Energy (Burned − Consumed)
+                unit: kcal
+                min: -500
+                max: 1500
+                needle: true
+                severity:
+                  green: 0
+                  yellow: -200
+                  red: -500
+
+              # Calories + macros
+              - type: entities
+                title: Calories & Macros
+                entities:
+                  - entity: sensor.fatsecret_u1
+                    name: Consumed
+                  - entity: sensor.kcal_u1_goal
+                    name: Goal
+                  - type: attribute
+                    entity: sensor.fatsecret_u1
+                    attribute: protein
+                    name: Protein
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.fatsecret_u1
+                    attribute: fat
+                    name: Fat
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.fatsecret_u1
+                    attribute: carbs
+                    name: Carbs
+                    suffix: " g"
+
+              # Garmin stats
+              - type: glance
+                title: Garmin — User 1
+                columns: 4
+                entities:
+                  - entity: sensor.garmin_connect_calories
+                    name: Burned
+                  - entity: sensor.garmin_connect_steps
+                    name: Steps
+                  - entity: sensor.garmin_connect_body_battery
+                    name: Body Battery
+                  - entity: sensor.garmin_connect_sleep_score
+                    name: Sleep
+
+          # ── User 2 ──────────────────────────────────────────────
+          - type: vertical-stack
+            cards:
+
+              - type: markdown
+                content: "## 👤 User 2"
+
+              # Calories consumed vs goal
+              - type: gauge
+                entity: sensor.kcal_u2_balance
+                name: Remaining Today
+                unit: kcal
+                min: -500
+                max: 1000
+                needle: true
+                severity:
+                  green: 100
+                  yellow: 0
+                  red: -500
+
+              # Net energy: burned − consumed
+              - type: gauge
+                entity: sensor.kcal_u2_net
+                name: Net Energy (Burned − Consumed)
+                unit: kcal
+                min: -500
+                max: 1500
+                needle: true
+                severity:
+                  green: 0
+                  yellow: -200
+                  red: -500
+
+              # Calories + macros
+              - type: entities
+                title: Calories & Macros
+                entities:
+                  - entity: sensor.fatsecret_u2
+                    name: Consumed
+                  - entity: sensor.kcal_u2_goal
+                    name: Goal
+                  - type: attribute
+                    entity: sensor.fatsecret_u2
+                    attribute: protein
+                    name: Protein
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.fatsecret_u2
+                    attribute: fat
+                    name: Fat
+                    suffix: " g"
+                  - type: attribute
+                    entity: sensor.fatsecret_u2
+                    attribute: carbs
+                    name: Carbs
+                    suffix: " g"
+
+              # Garmin stats
+              - type: glance
+                title: Garmin — User 2
+                columns: 4
+                entities:
+                  - entity: sensor.garmin_connect_calories_2
+                    name: Burned
+                  - entity: sensor.garmin_connect_steps_2
+                    name: Steps
+                  - entity: sensor.garmin_connect_body_battery_2
+                    name: Body Battery
+                  - entity: sensor.garmin_connect_sleep_score_2
+                    name: Sleep
