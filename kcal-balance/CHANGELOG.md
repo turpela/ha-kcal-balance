@@ -7,9 +7,31 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Planned
-- Phase 2: FatSecret REST API integration (custom Python scripts)
-- Phase 3: Template sensors for deficit/surplus, macros, calorie goal
 - Phase 4: Per-user Lovelace dashboards
+
+---
+
+## [1.1.1] — 2026-06-28
+
+### Added
+- `sensor.kcal_u1_net` / `sensor.kcal_u2_net` — actual energy balance (Garmin burned − FatSecret consumed); positive = deficit, negative = surplus
+- `sensor.kcal_u1_goal` / `sensor.kcal_u2_goal` — daily calorie goal with `goal_mode` (weight_loss / maintenance / muscle_gain) and `source` (garmin / fixed) attributes
+- `sensor.kcal_u1_balance` / `sensor.kcal_u2_balance` — goal minus consumed; positive = room left, negative = over goal
+- New add-on config options per user: `u1_goal_mode`, `u1_goal_kcal`, `u1_goal_offset`, `u1_garmin_entity` (and `u2_` equivalents)
+- `templates/TEMPLATES.md` — full sensor reference for Phase 3
+
+### Changed
+- Garmin TDEE read once per poll cycle and reused for both net and goal computation (avoids duplicate HA API calls)
+- `kcal-balance/config.yaml` bumped to `1.1.1`
+
+---
+
+## [1.1.0] — 2026-06-28
+
+### Added
+- Phase 3 foundation: goal config schema added to `kcal-balance/config.yaml`
+- `kcal-balance/fatsecret.py` — reads Garmin TDEE via HA Supervisor API, computes goal and balance, pushes `sensor.kcal_u1_goal` and `sensor.kcal_u1_balance`
+- `fatsecret/fatsecret_test.py` — local integration test showing per-entry breakdown and totals
 
 ---
 
