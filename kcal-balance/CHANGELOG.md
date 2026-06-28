@@ -8,6 +8,14 @@ All notable changes to this project are documented here.
 
 ---
 
+## [1.4.0] — 2026-06-29
+
+### Added
+- **Auto sidebar registration** — on first start the add-on calls the HA Lovelace API to create the "Kcal Balance" dashboard and push its full two-view config; the dashboard appears in the HA sidebar automatically, no manual YAML pasting needed
+- Dashboard registration is idempotent: if the dashboard already exists it is left untouched
+
+---
+
 ## [1.3.0] — 2026-06-28
 
 ### Added

@@ -42,15 +42,206 @@ logging.basicConfig(
 )
 log = logging.getLogger("kcal-balance")
 
-FATSECRET_API = "https://platform.fatsecret.com/rest/server.api"
-HA_API        = "http://supervisor/core/api"
-OPTIONS_FILE  = "/data/options.json"
-STATE_FILE    = "/data/weekly_state.json"
-TIMEZONE      = ZoneInfo("Europe/Helsinki")
+FATSECRET_API      = "https://platform.fatsecret.com/rest/server.api"
+HA_API             = "http://supervisor/core/api"
+OPTIONS_FILE       = "/data/options.json"
+STATE_FILE         = "/data/weekly_state.json"
+TIMEZONE           = ZoneInfo("Europe/Helsinki")
+DASHBOARD_URL_PATH = "kcal-balance"
 
 DEFAULT_GARMIN  = {"U1": "sensor.garmin_connect_calories",
                    "U2": "sensor.garmin_connect_calories_2"}
 DEFAULT_OFFSETS = {"weight_loss": -500, "maintenance": 0, "muscle_gain": 300}
+
+# ---------------------------------------------------------------------------
+# Dashboard definition (auto-registered in HA sidebar on first start)
+# ---------------------------------------------------------------------------
+
+DASHBOARD_CONFIG = {
+    "title": "Kcal Balance",
+    "views": [
+        {
+            "title": "Today",
+            "path": "kcal-balance",
+            "icon": "mdi:food-apple",
+            "cards": [
+                {
+                    "type": "horizontal-stack",
+                    "cards": [
+                        {
+                            "type": "vertical-stack",
+                            "cards": [
+                                {"type": "markdown", "content": "## \U0001f464 User 1"},
+                                {
+                                    "type": "gauge",
+                                    "entity": "sensor.kcal_u1_balance",
+                                    "name": "Remaining Today",
+                                    "unit": "kcal",
+                                    "min": -500, "max": 1000, "needle": True,
+                                    "severity": {"green": 100, "yellow": 0, "red": -500},
+                                },
+                                {
+                                    "type": "gauge",
+                                    "entity": "sensor.kcal_u1_net",
+                                    "name": "Net Energy (Burned − Consumed)",
+                                    "unit": "kcal",
+                                    "min": -500, "max": 1500, "needle": True,
+                                    "severity": {"green": 0, "yellow": -200, "red": -500},
+                                },
+                                {
+                                    "type": "entities",
+                                    "title": "Calories & Macros",
+                                    "entities": [
+                                        {"entity": "sensor.fatsecret_u1", "name": "Consumed"},
+                                        {"entity": "sensor.kcal_u1_goal", "name": "Daily Goal"},
+                                        {"type": "attribute", "entity": "sensor.fatsecret_u1",
+                                         "attribute": "protein", "name": "Protein", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.fatsecret_u1",
+                                         "attribute": "fat", "name": "Fat", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.fatsecret_u1",
+                                         "attribute": "carbs", "name": "Carbs", "suffix": " g"},
+                                    ],
+                                },
+                                {
+                                    "type": "glance",
+                                    "title": "Garmin — User 1",
+                                    "columns": 4,
+                                    "entities": [
+                                        {"entity": "sensor.garmin_connect_calories", "name": "Burned"},
+                                        {"entity": "sensor.garmin_connect_steps", "name": "Steps"},
+                                        {"entity": "sensor.garmin_connect_body_battery", "name": "Body Battery"},
+                                        {"entity": "sensor.garmin_connect_sleep_score", "name": "Sleep"},
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            "type": "vertical-stack",
+                            "cards": [
+                                {"type": "markdown", "content": "## \U0001f464 User 2"},
+                                {
+                                    "type": "gauge",
+                                    "entity": "sensor.kcal_u2_balance",
+                                    "name": "Remaining Today",
+                                    "unit": "kcal",
+                                    "min": -500, "max": 1000, "needle": True,
+                                    "severity": {"green": 100, "yellow": 0, "red": -500},
+                                },
+                                {
+                                    "type": "gauge",
+                                    "entity": "sensor.kcal_u2_net",
+                                    "name": "Net Energy (Burned − Consumed)",
+                                    "unit": "kcal",
+                                    "min": -500, "max": 1500, "needle": True,
+                                    "severity": {"green": 0, "yellow": -200, "red": -500},
+                                },
+                                {
+                                    "type": "entities",
+                                    "title": "Calories & Macros",
+                                    "entities": [
+                                        {"entity": "sensor.fatsecret_u2", "name": "Consumed"},
+                                        {"entity": "sensor.kcal_u2_goal", "name": "Daily Goal"},
+                                        {"type": "attribute", "entity": "sensor.fatsecret_u2",
+                                         "attribute": "protein", "name": "Protein", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.fatsecret_u2",
+                                         "attribute": "fat", "name": "Fat", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.fatsecret_u2",
+                                         "attribute": "carbs", "name": "Carbs", "suffix": " g"},
+                                    ],
+                                },
+                                {
+                                    "type": "glance",
+                                    "title": "Garmin — User 2",
+                                    "columns": 4,
+                                    "entities": [
+                                        {"entity": "sensor.garmin_connect_calories_2", "name": "Burned"},
+                                        {"entity": "sensor.garmin_connect_steps_2", "name": "Steps"},
+                                        {"entity": "sensor.garmin_connect_body_battery_2", "name": "Body Battery"},
+                                        {"entity": "sensor.garmin_connect_sleep_score_2", "name": "Sleep"},
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+        },
+        {
+            "title": "This Week",
+            "path": "kcal-balance-week",
+            "icon": "mdi:calendar-week",
+            "cards": [
+                {
+                    "type": "horizontal-stack",
+                    "cards": [
+                        {
+                            "type": "vertical-stack",
+                            "cards": [
+                                {"type": "markdown", "content": "## \U0001f464 User 1 — This Week"},
+                                {
+                                    "type": "gauge",
+                                    "entity": "sensor.kcal_u1_weekly_balance",
+                                    "name": "Weekly Remaining",
+                                    "unit": "kcal",
+                                    "min": -3500, "max": 7000, "needle": True,
+                                    "severity": {"green": 500, "yellow": 0, "red": -3500},
+                                },
+                                {
+                                    "type": "entities",
+                                    "title": "Weekly Calories & Macros",
+                                    "entities": [
+                                        {"entity": "sensor.kcal_u1_weekly_consumed", "name": "Consumed this week"},
+                                        {"entity": "sensor.kcal_u1_weekly_goal", "name": "Weekly goal"},
+                                        {"entity": "sensor.kcal_u1_weekly_balance", "name": "Remaining"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u1_weekly_consumed",
+                                         "attribute": "protein", "name": "Protein", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u1_weekly_consumed",
+                                         "attribute": "fat", "name": "Fat", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u1_weekly_consumed",
+                                         "attribute": "carbs", "name": "Carbs", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u1_weekly_consumed",
+                                         "attribute": "days_tracked", "name": "Days tracked"},
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            "type": "vertical-stack",
+                            "cards": [
+                                {"type": "markdown", "content": "## \U0001f464 User 2 — This Week"},
+                                {
+                                    "type": "gauge",
+                                    "entity": "sensor.kcal_u2_weekly_balance",
+                                    "name": "Weekly Remaining",
+                                    "unit": "kcal",
+                                    "min": -3500, "max": 7000, "needle": True,
+                                    "severity": {"green": 500, "yellow": 0, "red": -3500},
+                                },
+                                {
+                                    "type": "entities",
+                                    "title": "Weekly Calories & Macros",
+                                    "entities": [
+                                        {"entity": "sensor.kcal_u2_weekly_consumed", "name": "Consumed this week"},
+                                        {"entity": "sensor.kcal_u2_weekly_goal", "name": "Weekly goal"},
+                                        {"entity": "sensor.kcal_u2_weekly_balance", "name": "Remaining"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u2_weekly_consumed",
+                                         "attribute": "protein", "name": "Protein", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u2_weekly_consumed",
+                                         "attribute": "fat", "name": "Fat", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u2_weekly_consumed",
+                                         "attribute": "carbs", "name": "Carbs", "suffix": " g"},
+                                        {"type": "attribute", "entity": "sensor.kcal_u2_weekly_consumed",
+                                         "attribute": "days_tracked", "name": "Days tracked"},
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+        },
+    ],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +337,61 @@ def ha_post(supervisor_token, entity_id, state, attributes):
     )
     with urllib.request.urlopen(req, timeout=10) as r:
         return r.status
+
+
+def ensure_dashboard(supervisor_token):
+    """Register the Kcal Balance dashboard in the HA sidebar (idempotent)."""
+    headers = {
+        "Authorization": f"Bearer {supervisor_token}",
+        "Content-Type": "application/json",
+    }
+
+    # 1. Check if dashboard already exists
+    try:
+        req = urllib.request.Request(
+            f"{HA_API}/lovelace/dashboards",
+            headers={"Authorization": f"Bearer {supervisor_token}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            existing = json.loads(r.read())
+            if any(d.get("url_path") == DASHBOARD_URL_PATH for d in existing):
+                log.debug("Dashboard '%s' already registered — skipping", DASHBOARD_URL_PATH)
+                return
+    except Exception as exc:
+        log.warning("Could not list Lovelace dashboards: %s", exc)
+        return
+
+    # 2. Create the dashboard entry (appears in sidebar)
+    payload = json.dumps({
+        "url_path":        DASHBOARD_URL_PATH,
+        "title":           "Kcal Balance",
+        "icon":            "mdi:scale-balance",
+        "show_in_sidebar": True,
+        "require_admin":   False,
+        "mode":            "storage",
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            f"{HA_API}/lovelace/dashboards",
+            data=payload, method="POST", headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            log.info("Dashboard '%s' created (HTTP %d)", DASHBOARD_URL_PATH, r.status)
+    except Exception as exc:
+        log.warning("Could not create dashboard: %s", exc)
+        return
+
+    # 3. Push the view/card config
+    payload = json.dumps(DASHBOARD_CONFIG).encode()
+    try:
+        req = urllib.request.Request(
+            f"{HA_API}/lovelace/dashboards/{DASHBOARD_URL_PATH}/config",
+            data=payload, method="POST", headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            log.info("Dashboard config pushed (HTTP %d)", r.status)
+    except Exception as exc:
+        log.warning("Could not push dashboard config: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +682,9 @@ def main():
         log.error("SUPERVISOR_TOKEN not set — is homeassistant_api enabled in config.yaml?")
         sys.exit(1)
     log.debug("SUPERVISOR_TOKEN present (%d chars)", len(supervisor_token))
+
+    # Auto-register dashboard in HA sidebar on first start
+    ensure_dashboard(supervisor_token)
 
     opts  = load_config()
     users = build_user_list(opts)
