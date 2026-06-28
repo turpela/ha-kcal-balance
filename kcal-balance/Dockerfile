@@ -3,7 +3,7 @@ FROM $BUILD_FROM
 
 RUN apk add --no-cache python3
 
-COPY run.sh fatsecret.py /
-RUN chmod a+x /run.sh
+COPY fatsecret.py /
+COPY rootfs /
 
-CMD [ "/run.sh" ]
+RUN chmod a+x /etc/services.d/kcal-balance/run

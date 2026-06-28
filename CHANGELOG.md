@@ -13,6 +13,18 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.3.1] — 2026-06-28
+
+### Fixed
+- Add-on now starts correctly — replaced `CMD ["/run.sh"]` + `with-contenv` shebang approach with proper s6 service directory (`rootfs/etc/services.d/kcal-balance/run`); s6-overlay is now PID 1 as required
+- Removed `run.sh` from add-on root (superseded by service directory)
+
+### Changed
+- `kcal-balance/config.yaml` — U2 credential fields marked optional (`str?`); add-on works with a single user
+- `kcal-balance/fatsecret.py` — skips User 2 poll when U2 credentials are absent or empty
+
+---
+
 ## [0.3.0] — 2026-06-28
 
 ### Added

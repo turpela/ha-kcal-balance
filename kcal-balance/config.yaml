@@ -27,8 +27,8 @@ schema:
   u1_consumer_secret: str
   u1_access_token: str
   u1_access_token_secret: str
-  u2_consumer_key: str
-  u2_consumer_secret: str
-  u2_access_token: str
-  u2_access_token_secret: str
+  u2_consumer_key: str?
+  u2_consumer_secret: str?
+  u2_access_token: str?
+  u2_access_token_secret: str?
   scan_interval: int

@@ -145,26 +145,30 @@ def main():
             "entity_id": "sensor.fatsecret_u1",
             "friendly_name": "FatSecret U1",
             "creds": {
-                "consumer_key":       opts["u1_consumer_key"],
-                "consumer_secret":    opts["u1_consumer_secret"],
-                "access_token":       opts["u1_access_token"],
+                "consumer_key":        opts["u1_consumer_key"],
+                "consumer_secret":     opts["u1_consumer_secret"],
+                "access_token":        opts["u1_access_token"],
                 "access_token_secret": opts["u1_access_token_secret"],
-            },
-        },
-        {
-            "label": "U2",
-            "entity_id": "sensor.fatsecret_u2",
-            "friendly_name": "FatSecret U2",
-            "creds": {
-                "consumer_key":       opts["u2_consumer_key"],
-                "consumer_secret":    opts["u2_consumer_secret"],
-                "access_token":       opts["u2_access_token"],
-                "access_token_secret": opts["u2_access_token_secret"],
             },
         },
     ]
 
-    print(f"Kcal Balance started — polling every {scan_interval}s")
+    # User 2 is optional — only add if all four credentials are provided
+    u2_creds = {
+        "consumer_key":        opts.get("u2_consumer_key", ""),
+        "consumer_secret":     opts.get("u2_consumer_secret", ""),
+        "access_token":        opts.get("u2_access_token", ""),
+        "access_token_secret": opts.get("u2_access_token_secret", ""),
+    }
+    if all(u2_creds.values()):
+        users.append({
+            "label": "U2",
+            "entity_id": "sensor.fatsecret_u2",
+            "friendly_name": "FatSecret U2",
+            "creds": u2_creds,
+        })
+
+    print(f"Kcal Balance started — {len(users)} user(s) active, polling every {scan_interval}s")
 
     while True:
         for user in users:
