@@ -49,6 +49,7 @@ def fetch_entries(creds):
         creds["consumer_secret"],
         creds["access_token"],
         creds["access_token_secret"],
+        signature_type="body",
     )
     resp = requests.post(
         FATSECRET_API,
