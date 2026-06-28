@@ -1,5 +1,5 @@
 name: "Kcal Balance"
-version: "1.0.1"
+version: "1.0.3"
 slug: "kcal_balance"
 description: "Daily calorie balance tracker — FatSecret food diary for two users"
 url: "https://github.com/turpela/ha-kcal-balance"
@@ -11,6 +11,7 @@ arch:
   - i386
 startup: application
 boot: auto
+init: false
 homeassistant_api: true
 options:
   u1_consumer_key: ""
@@ -24,11 +25,11 @@ options:
   scan_interval: 300
 schema:
   u1_consumer_key: str
-  u1_consumer_secret: str
+  u1_consumer_secret: password
   u1_access_token: str
-  u1_access_token_secret: str
+  u1_access_token_secret: password
   u2_consumer_key: str?
-  u2_consumer_secret: str?
+  u2_consumer_secret: password?
   u2_access_token: str?
-  u2_access_token_secret: str?
+  u2_access_token_secret: password?
   scan_interval: int

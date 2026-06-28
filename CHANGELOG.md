@@ -13,6 +13,30 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.3.3] — 2026-06-28
+
+### Fixed
+- `kcal-balance/config.yaml` — added `init: false`; this was the root cause of all s6-overlay PID 1 errors (without it HA injects its own init system which conflicts with a plain Docker CMD)
+- `kcal-balance/config.yaml` bumped to `1.0.3`
+
+### Changed
+- `kcal-balance/config.yaml` — secret fields (`consumer_secret`, `access_token_secret`) now use `password` / `password?` schema type so HA masks them in the UI
+- `kcal-balance/Dockerfile` — switched from `python3 -u` flag to `ENV PYTHONUNBUFFERED=1` (idiomatic)
+
+---
+
+## [0.3.2] — 2026-06-28
+
+### Fixed
+- Replaced HA base image + s6-overlay with `python:3.11-alpine` — Python runs directly as PID 1, eliminating the `s6-overlay-suexec: fatal: can only run as pid 1` error entirely
+- Removed `build.yaml` and `rootfs/` (no longer needed without s6)
+- `kcal-balance/config.yaml` bumped to `1.0.2`
+
+### Changed
+- `kcal-balance/fatsecret.py` — replaced `print()` with structured `logging` (DEBUG/INFO/ERROR); startup sequence now logs options file load, token presence, user count, and per-poll HTTP status; network and HTTP errors caught and logged separately with full detail
+
+---
+
 ## [0.3.1] — 2026-06-28
 
 ### Fixed

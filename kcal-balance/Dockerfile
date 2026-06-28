@@ -1,9 +1,6 @@
-ARG BUILD_FROM
-FROM $BUILD_FROM
+FROM python:3.11-alpine
 
-RUN apk add --no-cache python3
+ENV PYTHONUNBUFFERED=1
 
 COPY fatsecret.py /
-COPY rootfs /
-
-RUN chmod a+x /etc/services.d/kcal-balance/run
+CMD ["python3", "/fatsecret.py"]
