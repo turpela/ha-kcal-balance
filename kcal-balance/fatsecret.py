@@ -295,7 +295,7 @@ def summarise(raw):
         return {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0}
     if "error" in raw:
         raise RuntimeError(f"FatSecret error {raw['error']['code']}: {raw['error']['message']}")
-    entries = raw.get("food_entries", {}).get("food_entry", [])
+    entries = (raw.get("food_entries") or {}).get("food_entry", [])
     if isinstance(entries, dict):
         entries = [entries]
     totals = {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0}

@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [1.4.3] — 2026-06-29
+
+### Fixed
+- FatSecret returns `{"food_entries": null}` for empty days — the key is present so `.get("food_entries", {})` returned `None` instead of `{}`, crashing on the chained `.get("food_entry", [])`. Fixed with `(raw.get("food_entries") or {})` which collapses null to an empty dict
+
+---
+
 ## [1.4.2] — 2026-06-29
 
 ### Fixed
