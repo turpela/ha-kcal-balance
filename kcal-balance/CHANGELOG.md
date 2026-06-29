@@ -8,6 +8,31 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.0.0] — 2026-06-29
+
+### Added
+- **Web dashboard via HA ingress** — dashboard appears natively in the HA sidebar (`mdi:scale-balance`); no Lovelace YAML needed
+- **Today view** — consumed calories, daily goal progress bar, balance, net energy, macros
+- **This Week view** — bar chart (Chart.js) of daily calories vs goal, weekly summary with macros
+- **SQLite database** (`/data/kcal.db`) — replaces `weekly_state.json`; full history queryable via `/api/history`
+- **REST API** — `/api/today`, `/api/week`, `/api/history?weeks=N`
+
+### Changed
+- `app.py` — new main entry point (Flask web server + background polling thread)
+- `fatsecret.py` — slimmed to FatSecret API client only (OAuth + fetch + summarise)
+- `ha.py` — new module: HA Supervisor API helpers + sensor push
+- `store.py` — new module: SQLite persistence layer
+- `Dockerfile` — adds `flask`; CMD changed to `python3 /app.py`
+- `config.yaml` — adds `ingress: true`, `ingress_port: 8080`, `panel_icon`, `panel_title`
+- HA sensors retained for automations/notifications (same entity IDs as before)
+- `README.md` — fully rewritten for v2 architecture
+
+### Removed
+- `lovelace/` directory — dashboard is now the web app
+- `weekly_state.json` — superseded by SQLite
+
+---
+
 ## [1.4.3] — 2026-06-29
 
 ### Fixed

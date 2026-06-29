@@ -1,7 +1,7 @@
 name: "Kcal Balance"
-version: "1.4.3"
+version: "2.0.0"
 slug: "kcal_balance"
-description: "Daily calorie balance tracker — FatSecret food diary for two users"
+description: "Calorie balance tracker with web dashboard — FatSecret + Garmin for two users"
 url: "https://github.com/turpela/ha-kcal-balance"
 arch:
   - aarch64
@@ -13,6 +13,11 @@ startup: application
 boot: auto
 init: false
 homeassistant_api: true
+ingress: true
+ingress_port: 8080
+ingress_entry: /
+panel_icon: mdi:scale-balance
+panel_title: Kcal Balance
 options:
   u1_consumer_key: ""
   u1_consumer_secret: ""
