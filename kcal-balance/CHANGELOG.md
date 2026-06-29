@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.1.1] — 2026-06-29
+
+### Fixed
+- Weekly goal is now pro-rated to days elapsed (Mon = 1×daily, Tue = 2×daily … Sun = 7×daily) instead of always showing the full 7-day goal; balance and goal label now correctly reflect where you are in the week
+
+---
+
 ## [2.1.0] — 2026-06-29
 
 ### Added

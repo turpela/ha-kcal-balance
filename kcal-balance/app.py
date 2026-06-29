@@ -164,7 +164,9 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 week_rows     = store.get_range(label, monday.isoformat(), today_str)
                 weekly_totals = store.aggregate(week_rows)
                 days_tracked  = len(week_rows)
-                weekly_goal   = round(goal * 7, 1) if goal is not None else None
+                # Goal is pro-rated: daily_goal × days elapsed (Mon=1 … Sun=7)
+                days_elapsed  = len(week_dates(today))
+                weekly_goal   = round(goal * days_elapsed, 1) if goal is not None else None
 
                 # Balance / net
                 balance         = round(goal - totals["calories"], 1) if goal is not None else None
@@ -185,6 +187,7 @@ def _poll_loop(users, supervisor_token, scan_interval):
                     "weekly_goal":    weekly_goal,
                     "weekly_balance": weekly_balance,
                     "days_tracked":   days_tracked,
+                    "days_elapsed":   days_elapsed,
                     "last_updated":   datetime.now(TIMEZONE).isoformat(),
                 }
 
@@ -505,10 +508,12 @@ async function loadWeek() {
         <div class="card">
           <div class="card-title">Weekly Summary</div>
           ${metric('Consumed', `${fmt(td.weekly?.calories ?? 0, 0)} kcal`)}
-          ${td.weekly_goal != null ? metric('Goal', `${fmt(td.weekly_goal,0)} kcal`) : ''}
+          ${td.weekly_goal != null ? metric(
+              `Goal (${td.days_elapsed ?? 1} day${(td.days_elapsed ?? 1) !== 1 ? 's' : ''})`,
+              `${fmt(td.weekly_goal,0)} kcal`) : ''}
           ${td.weekly_balance != null ? metric('Balance',
               `<span style="color:${clr(td.weekly_balance)}">${sign(td.weekly_balance)} kcal</span>`) : ''}
-          ${metric('Days tracked', `${td.days_tracked ?? rows.length} / 7`)}
+          ${metric('Days tracked', `${td.days_tracked ?? rows.length} / ${td.days_elapsed ?? 7}`)}
           ${metric('Protein', `${fmt(td.weekly?.protein ?? 0)} g`)}
           ${metric('Fat',     `${fmt(td.weekly?.fat ?? 0)} g`)}
           ${metric('Carbs',   `${fmt(td.weekly?.carbs ?? 0)} g`)}
