@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [1.4.2] — 2026-06-29
+
+### Fixed
+- `summarise()` now guards with `isinstance(raw, dict)` instead of `raw is None`; FatSecret can return other non-dict types (list, string) for empty days — all are now treated as zero consumption and logged at DEBUG level so the actual value is visible
+
+---
+
 ## [1.4.1] — 2026-06-29
 
 ### Fixed

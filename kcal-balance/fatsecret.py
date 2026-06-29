@@ -289,8 +289,9 @@ def fetch_entries(creds, target_date):
 
 
 def summarise(raw):
-    if raw is None:
-        # FatSecret returns JSON null when there are no entries for the day
+    if not isinstance(raw, dict):
+        # FatSecret returns null or a non-dict when there are no entries
+        log.debug("summarise: unexpected raw type %s, value=%r — treating as empty", type(raw), raw)
         return {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0}
     if "error" in raw:
         raise RuntimeError(f"FatSecret error {raw['error']['code']}: {raw['error']['message']}")
