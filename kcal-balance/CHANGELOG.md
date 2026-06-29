@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.1.0] — 2026-06-29
+
+### Added
+- **Editable user names** — click the "User 1" / "User 2" heading in the dashboard to rename; press Enter or click away to save; names persist in SQLite across restarts
+
+---
+
 ## [2.0.0] — 2026-06-29
 
 ### Added

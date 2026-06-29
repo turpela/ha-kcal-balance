@@ -31,6 +31,12 @@ def init_db():
                 PRIMARY KEY (user, date)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
 
 
 def upsert_day(user, date_str, totals):
@@ -87,6 +93,27 @@ def get_range(user, start_str, end_str):
             (user, start_str, end_str),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_setting(key, default=None):
+    """Return a settings value, or default if not set."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key=?", (key,)
+        ).fetchone()
+        return row["value"] if row else default
+
+
+def set_setting(key, value):
+    """Upsert a setting."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (key, value),
+        )
 
 
 def aggregate(rows):

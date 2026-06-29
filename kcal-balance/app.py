@@ -305,6 +305,16 @@ body {
 .footer { text-align: center; font-size: 12px; color: var(--sub); margin-top: 16px; }
 /* ── Empty state ── */
 .empty { padding: 32px; text-align: center; color: var(--sub); }
+/* ── Editable name ── */
+.user-name {
+  cursor: pointer; border-radius: 6px; padding: 2px 6px; margin: -2px -6px;
+  transition: background .15s;
+}
+.user-name:hover { background: rgba(255,255,255,0.08); }
+.user-name:focus {
+  outline: none; background: rgba(255,255,255,0.12);
+  box-shadow: 0 0 0 2px var(--blue);
+}
 </style>
 </head>
 <body>
@@ -337,6 +347,49 @@ function metric(label, valueHtml) {
     <span class="metric-label">${label}</span>
     <span class="metric-value">${valueHtml}</span>
   </div>`;
+}
+
+/* ── Settings / user names ── */
+let _names = { U1: 'User 1', U2: 'User 2' };
+
+async function loadSettings() {
+  try {
+    const r = await fetch('api/settings');
+    const s = await r.json();
+    _names.U1 = s.u1_name || 'User 1';
+    _names.U2 = s.u2_name || 'User 2';
+  } catch(e) { /* keep defaults */ }
+}
+
+function nameKey(lbl) { return lbl === 'U1' ? 'u1_name' : 'u2_name'; }
+
+function editableName(lbl) {
+  return `<span
+    class="user-name"
+    contenteditable="true"
+    spellcheck="false"
+    data-lbl="${lbl}"
+    onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+    onblur="saveName(this)"
+  >${_names[lbl]}</span>`;
+}
+
+async function saveName(el) {
+  const lbl  = el.dataset.lbl;
+  const name = el.textContent.trim() || (lbl === 'U1' ? 'User 1' : 'User 2');
+  el.textContent = name;          // normalise whitespace
+  _names[lbl] = name;
+  try {
+    await fetch('api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [nameKey(lbl)]: name }),
+    });
+    // sync the other tab's heading if visible
+    document.querySelectorAll(`[data-lbl="${lbl}"].user-name`).forEach(e => {
+      if (e !== el) e.textContent = name;
+    });
+  } catch(e) { console.error('Could not save name', e); }
 }
 
 /* ── Tabs ── */
@@ -409,7 +462,7 @@ async function loadToday() {
     for (const lbl of ['U1','U2']) {
       if (!data[lbl]) continue;
       html += `<div class="user-block">
-        <div class="section-title">👤 User ${lbl === 'U1' ? '1' : '2'}</div>
+        <div class="section-title">👤 ${editableName(lbl)}</div>
         ${renderUserToday(data[lbl])}
       </div>`;
     }
@@ -444,7 +497,7 @@ async function loadWeek() {
       const userNum = lbl === 'U1' ? '1' : '2';
 
       html += `<div class="user-block">
-        <div class="section-title">👤 User ${userNum} — This Week</div>
+        <div class="section-title">👤 ${editableName(lbl)} — This Week</div>
         <div class="card" style="margin-bottom:10px">
           <div class="card-title">Daily Calories</div>
           <canvas id="chart-${lbl}" height="110"></canvas>
@@ -519,9 +572,11 @@ async function loadWeek() {
   }
 }
 
-// Initial load + 60s auto-refresh
-loadToday();
-setInterval(loadToday, 60_000);
+// Boot: load settings first, then render
+loadSettings().then(() => {
+  loadToday();
+  setInterval(loadToday, 60_000);
+});
 </script>
 </body>
 </html>"""
@@ -530,6 +585,25 @@ setInterval(loadToday, 60_000);
 @app.route("/")
 def index():
     return render_template_string(DASHBOARD_HTML)
+
+
+@app.route("/api/settings", methods=["GET"])
+def api_settings_get():
+    return jsonify({
+        "u1_name": store.get_setting("u1_name", "User 1"),
+        "u2_name": store.get_setting("u2_name", "User 2"),
+    })
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_settings_post():
+    data = request.get_json(silent=True) or {}
+    for key in ("u1_name", "u2_name"):
+        if key in data:
+            name = str(data[key]).strip()[:40]  # cap at 40 chars
+            if name:
+                store.set_setting(key, name)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/today")
