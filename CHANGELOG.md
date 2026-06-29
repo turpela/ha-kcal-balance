@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [1.4.1] — 2026-06-29
+
+### Fixed
+- `summarise()` crashed with `AttributeError: 'NoneType' object has no attribute 'get'` when FatSecret returns JSON `null` for days with no food entries; now correctly returns zero totals
+
+---
+
 ## [1.4.0] — 2026-06-29
 
 ### Added

@@ -289,6 +289,9 @@ def fetch_entries(creds, target_date):
 
 
 def summarise(raw):
+    if raw is None:
+        # FatSecret returns JSON null when there are no entries for the day
+        return {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0}
     if "error" in raw:
         raise RuntimeError(f"FatSecret error {raw['error']['code']}: {raw['error']['message']}")
     entries = raw.get("food_entries", {}).get("food_entry", [])
