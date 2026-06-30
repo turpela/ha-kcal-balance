@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Kcal Balance add-on — v2.2.0
+Kcal Balance add-on — v2.3.0
 
 Architecture:
   - Flask web server (port 8080) served via HA ingress → dashboard in sidebar
   - Background polling thread → FatSecret every scan_interval seconds
-  - SQLite /data/kcal.db → persistent history
+  - SQLite /data/kcal.db → persistent history (food + burned per day)
   - HA sensor push → thin layer for automations/notifications
 
 Modules:
@@ -64,6 +64,9 @@ def week_dates(d):
     monday = week_monday(d)
     return [monday + timedelta(days=i) for i in range(d.weekday() + 1)]
 
+def month_start(d):
+    return d.replace(day=1)
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ _users = []
 # ---------------------------------------------------------------------------
 
 def _poll_loop(users, supervisor_token, scan_interval):
-    # Backfill missing week days from FatSecret history on startup
+    # Backfill missing week days from FatSecret on startup (no burned data available)
     today = today_local()
     for user in users:
         for d in week_dates(today):
@@ -127,6 +130,7 @@ def _poll_loop(users, supervisor_token, scan_interval):
         today     = today_local()
         today_str = today.isoformat()
         monday    = week_monday(today)
+        mstart    = month_start(today)
 
         for user in users:
             label  = user["label"]
@@ -136,10 +140,12 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 totals = fs.fetch_day(user["creds"], today)
                 if totals is None:
                     continue
-                store.upsert_day(label, today_str, totals)
 
-                # Garmin: burned calories
+                # Garmin: burned calories (read before storing so we persist it)
                 burned = ha.ha_get(supervisor_token, user["garmin_entity"])
+
+                # Persist food + burned for today
+                store.upsert_day(label, today_str, totals, burned=burned)
 
                 # GDA from settings (editable in dashboard Settings tab)
                 gda     = float(store.get_setting(f"{suffix}_gda", DEFAULT_GDA))
@@ -148,30 +154,49 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 # Net energy: burned − consumed (positive = deficit)
                 net = round(burned - totals["calories"], 1) if burned is not None else None
 
-                # Weekly totals from DB
+                # Weekly totals from DB (includes stored burned per day)
                 week_rows     = store.get_range(label, monday.isoformat(), today_str)
                 weekly_totals = store.aggregate(week_rows)
                 days_tracked  = len(week_rows)
                 days_elapsed  = len(week_dates(today))
 
-                # Pro-rated weekly GDA: daily GDA × days elapsed (Mon=1 … Sun=7)
+                # Weekly net = sum of daily (burned − consumed) for days with Garmin data
+                weekly_net = round(
+                    sum((r["burned"] - r["calories"]) for r in week_rows if (r.get("burned") or 0) > 0),
+                    1
+                ) if any((r.get("burned") or 0) > 0 for r in week_rows) else None
+
+                # Pro-rated weekly GDA
                 weekly_gda     = round(gda * days_elapsed, 1) if gda > 0 else None
                 weekly_gda_pct = round(weekly_totals["calories"] / weekly_gda * 100, 1) \
                                  if weekly_gda and weekly_gda > 0 else None
 
+                # Monthly totals (for snapshot summary)
+                month_rows     = store.get_range(label, mstart.isoformat(), today_str)
+                monthly_totals = store.aggregate(month_rows)
+                monthly_net    = round(
+                    sum((r["burned"] - r["calories"]) for r in month_rows if (r.get("burned") or 0) > 0),
+                    1
+                ) if any((r.get("burned") or 0) > 0 for r in month_rows) else None
+                monthly_days_tracked = len(month_rows)
+
                 snapshot = {
-                    "label":          label,
-                    "today":          totals,
-                    "burned":         burned,
-                    "gda":            gda,
-                    "gda_pct":        gda_pct,
-                    "net":            net,
-                    "weekly":         weekly_totals,
-                    "weekly_gda":     weekly_gda,
-                    "weekly_gda_pct": weekly_gda_pct,
-                    "days_tracked":   days_tracked,
-                    "days_elapsed":   days_elapsed,
-                    "last_updated":   datetime.now(TIMEZONE).isoformat(),
+                    "label":               label,
+                    "today":               totals,
+                    "burned":              burned,
+                    "gda":                 gda,
+                    "gda_pct":             gda_pct,
+                    "net":                 net,
+                    "weekly":              weekly_totals,
+                    "weekly_net":          weekly_net,
+                    "weekly_gda":          weekly_gda,
+                    "weekly_gda_pct":      weekly_gda_pct,
+                    "days_tracked":        days_tracked,
+                    "days_elapsed":        days_elapsed,
+                    "monthly":             monthly_totals,
+                    "monthly_net":         monthly_net,
+                    "monthly_days_tracked": monthly_days_tracked,
+                    "last_updated":        datetime.now(TIMEZONE).isoformat(),
                 }
 
                 with _state_lock:
@@ -237,9 +262,9 @@ body {
   font-size: 15px;
 }
 /* ── Tabs ── */
-.tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
 .tab {
-  padding: 7px 20px; border-radius: 20px; border: none; cursor: pointer;
+  padding: 7px 18px; border-radius: 20px; border: none; cursor: pointer;
   font-size: 14px; font-weight: 500;
   background: var(--card2); color: var(--sub); transition: all .15s;
 }
@@ -266,7 +291,7 @@ body {
 .big { display: flex; align-items: baseline; gap: 5px; }
 .big-num { font-size: 34px; font-weight: 700; line-height: 1; }
 .big-unit { font-size: 15px; color: var(--sub); }
-.big-sub { font-size: 12px; color: var(--sub); margin-top: 3px; }
+.big-sub { font-size: 12px; color: var(--sub); margin-top: 4px; }
 /* ── Progress bar ── */
 .bar-wrap {
   height: 5px; border-radius: 3px;
@@ -333,11 +358,13 @@ body {
 <div class="tabs">
   <button class="tab active" onclick="showTab('today',this)">Today</button>
   <button class="tab"        onclick="showTab('week',this)">This Week</button>
+  <button class="tab"        onclick="showTab('month',this)">This Month</button>
   <button class="tab"        onclick="showTab('settings',this)">Settings</button>
 </div>
 
 <div id="today"    class="panel active"><div id="today-content"><div class="empty">Loading…</div></div></div>
 <div id="week"     class="panel"><div id="week-content"><div class="empty">Loading…</div></div></div>
+<div id="month"    class="panel"><div id="month-content"><div class="empty">Loading…</div></div></div>
 <div id="settings" class="panel"><div id="settings-content"><div class="empty">Loading…</div></div></div>
 
 <div class="footer" id="footer"></div>
@@ -352,9 +379,16 @@ function gdaColor(pct) {
 }
 function netColor(v) {
   if (v == null) return 'var(--sub)';
-  return v >= 0 ? 'var(--green)' : 'var(--red)';
+  return v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--sub)';
 }
-function sign(v) { return v != null ? (v >= 0 ? '+' : '') + Math.round(v) : '—'; }
+function netBarColor(v) {
+  if (!v) return 'rgba(152,152,159,.4)';
+  return v > 0 ? 'rgba(48,209,88,.75)' : 'rgba(255,69,58,.75)';
+}
+function sign(v, dec=0) {
+  if (v == null) return '—';
+  return (v >= 0 ? '+' : '') + Number(v).toFixed(dec);
+}
 function fmt(v, dec=1) { return v != null ? Number(v).toFixed(dec) : '—'; }
 
 function metric(label, valueHtml) {
@@ -410,12 +444,13 @@ async function saveName(el) {
 }
 
 /* ── Tabs ── */
-let weekLoaded = false;
+let weekLoaded = false, monthLoaded = false;
 function showTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === name));
-  if (name === 'week' && !weekLoaded) { loadWeek(); weekLoaded = true; }
+  if (name === 'week'     && !weekLoaded)  { loadWeek();  weekLoaded  = true; }
+  if (name === 'month'    && !monthLoaded) { loadMonth(); monthLoaded = true; }
   if (name === 'settings') renderSettings();
 }
 
@@ -428,6 +463,23 @@ function renderUserToday(d) {
 
   return `
   <div class="grid">
+    <!-- Net Cal — hero card -->
+    <div class="card">
+      <div class="card-title">Net Cal</div>
+      ${d.net != null ? `
+        <div class="big">
+          <span class="big-num" style="color:${netColor(d.net)}">${sign(d.net)}</span>
+          <span class="big-unit">kcal</span>
+        </div>
+        <div class="big-sub muted">${d.net > 0 ? 'deficit' : d.net < 0 ? 'surplus' : 'balanced'}</div>
+        ${metric('Garmin burned', `<span class="blue">${fmt(d.burned, 0)} kcal</span>`)}
+      ` : `
+        <div class="big-num muted">—</div>
+        <div class="big-sub muted" style="margin-top:6px">Garmin not connected</div>
+      `}
+    </div>
+
+    <!-- Consumed + GDA% -->
     <div class="card">
       <div class="card-title">Consumed</div>
       <div class="big">
@@ -440,21 +492,7 @@ function renderUserToday(d) {
       <div class="bar-label" style="color:${barC}">${pct.toFixed(1)}% of GDA (${fmt(d.gda, 0)} kcal)</div>
     </div>
 
-    <div class="card">
-      <div class="card-title">Energy</div>
-      ${d.burned != null ? `
-        <div class="big">
-          <span class="big-num blue">${fmt(d.burned, 0)}</span>
-          <span class="big-unit">kcal burned</span>
-        </div>
-        ${metric('Net Cal', `<span style="color:${netColor(d.net)}">${sign(d.net)} kcal</span>`)}
-        <div class="big-sub muted" style="margin-top:6px">${d.net != null ? (d.net >= 0 ? 'deficit' : 'surplus') : ''}</div>
-      ` : `
-        <div class="big-num muted">—</div>
-        <div class="big-sub muted" style="margin-top:6px">Garmin not connected</div>
-      `}
-    </div>
-
+    <!-- Macros -->
     <div class="card" style="grid-column:1/-1">
       <div class="card-title">Macros</div>
       ${metric('Protein', `${fmt(t.protein)} g`)}
@@ -468,9 +506,8 @@ async function loadToday() {
   try {
     const r = await fetch('api/today');
     const data = await r.json();
-    const labels = Object.keys(data);
 
-    if (!labels.length) {
+    if (!Object.keys(data).length) {
       document.getElementById('today-content').innerHTML =
         '<div class="empty">Add-on is starting — first poll in a moment…</div>';
       return;
@@ -488,9 +525,8 @@ async function loadToday() {
 
     const ts = data.U1?.last_updated || data.U2?.last_updated;
     if (ts) {
-      const d = new Date(ts);
       document.getElementById('footer').textContent =
-        `Updated ${d.toLocaleTimeString()} · auto-refreshes every 60 s`;
+        `Updated ${new Date(ts).toLocaleTimeString()} · auto-refreshes every 60 s`;
     }
   } catch(e) {
     document.getElementById('today-content').innerHTML =
@@ -498,9 +534,53 @@ async function loadToday() {
   }
 }
 
-/* ── Week ── */
+/* ── Shared chart builder ── */
 const chartInstances = {};
 
+function buildNetChart(canvasId, rows, chartKey) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (chartInstances[chartKey]) chartInstances[chartKey].destroy();
+
+  const labels   = rows.map(r => {
+    const d = new Date(r.date + 'T12:00:00');
+    return d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'});
+  });
+  const netVals  = rows.map(r => (r.burned > 0) ? +(r.burned - r.calories).toFixed(1) : 0);
+  const colors   = netVals.map(v => netBarColor(v));
+
+  chartInstances[chartKey] = new Chart(canvas, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar', label: 'Net Cal', data: netVals,
+          backgroundColor: colors, borderRadius: 5,
+        },
+        {
+          type: 'line', label: 'Break-even',
+          data: rows.map(() => 0),
+          borderColor: 'rgba(152,152,159,.5)', borderDash: [4,4],
+          pointRadius: 0, fill: false, borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color:'#98989f', font:{size:11} }, grid: { color:'rgba(255,255,255,.04)' } },
+        y: {
+          ticks: { color:'#98989f', font:{size:11},
+            callback: v => (v >= 0 ? '+' : '') + v },
+          grid: { color:'rgba(255,255,255,.04)' },
+        },
+      },
+    },
+  });
+}
+
+/* ── This Week ── */
 async function loadWeek() {
   try {
     const [wr, tr] = await Promise.all([fetch('api/week'), fetch('api/today')]);
@@ -517,17 +597,17 @@ async function loadWeek() {
       html += `<div class="user-block">
         <div class="section-title">👤 ${editableName(lbl)} — This Week</div>
         <div class="card" style="margin-bottom:10px">
-          <div class="card-title">Daily Calories vs GDA</div>
-          <canvas id="chart-${lbl}" height="110"></canvas>
+          <div class="card-title">Daily Net Cal (burned − consumed)</div>
+          <canvas id="wchart-${lbl}" height="110"></canvas>
         </div>
         <div class="card">
           <div class="card-title">Weekly Summary</div>
+          ${td.weekly_net != null ? metric('Net Cal',
+              `<span style="color:${netColor(td.weekly_net)}">${sign(td.weekly_net)} kcal</span>`) : ''}
           ${metric('Consumed', `${fmt(td.weekly?.calories ?? 0, 0)} kcal`)}
           ${td.weekly_gda_pct != null ? metric(
               `GDA% (${td.days_elapsed ?? 1} day${(td.days_elapsed ?? 1) !== 1 ? 's' : ''})`,
               `<span style="color:${gdaColor(td.weekly_gda_pct)}">${fmt(td.weekly_gda_pct, 1)}%</span>`) : ''}
-          ${td.net != null ? metric('Net Cal (today)',
-              `<span style="color:${netColor(td.net)}">${sign(td.net)} kcal</span>`) : ''}
           ${metric('Days tracked', `${td.days_tracked ?? rows.length} / ${td.days_elapsed ?? 7}`)}
           ${metric('Protein', `${fmt(td.weekly?.protein ?? 0)} g`)}
           ${metric('Fat',     `${fmt(td.weekly?.fat ?? 0)} g`)}
@@ -538,56 +618,72 @@ async function loadWeek() {
 
     document.getElementById('week-content').innerHTML = html || '<div class="empty">No weekly data yet</div>';
 
-    // Draw charts
     for (const lbl of ['U1','U2']) {
       const rows = weekData[lbl];
       if (!rows || !rows.length) continue;
-      const td  = todayData[lbl] || {};
-      const gda = td.gda || 2000;
-      const canvas = document.getElementById(`chart-${lbl}`);
-      if (!canvas) continue;
-
-      if (chartInstances[lbl]) chartInstances[lbl].destroy();
-
-      const chartLabels = rows.map(r => {
-        const d = new Date(r.date + 'T12:00:00');
-        return d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'});
-      });
-      const calories = rows.map(r => r.calories);
-      const colors   = calories.map(c => {
-        const p = (c / gda) * 100;
-        return p < 90 ? 'rgba(48,209,88,.75)' : p <= 100 ? 'rgba(255,214,10,.75)' : 'rgba(255,69,58,.75)';
-      });
-
-      chartInstances[lbl] = new Chart(canvas, {
-        data: {
-          labels: chartLabels,
-          datasets: [
-            {
-              type: 'bar', label: 'Calories', data: calories,
-              backgroundColor: colors, borderRadius: 5,
-            },
-            {
-              type: 'line', label: 'GDA',
-              data: rows.map(() => gda),
-              borderColor: 'rgba(255,214,10,.9)', borderDash: [5,4],
-              pointRadius: 0, fill: false, borderWidth: 1.5,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color:'#98989f', font:{size:11} }, grid: { color:'rgba(255,255,255,.04)' } },
-            y: { ticks: { color:'#98989f', font:{size:11} }, grid: { color:'rgba(255,255,255,.04)' }, beginAtZero: true },
-          },
-        },
-      });
+      buildNetChart(`wchart-${lbl}`, rows, `week-${lbl}`);
     }
   } catch(e) {
     document.getElementById('week-content').innerHTML =
       '<div class="empty" style="color:var(--red)">Could not load week data</div>';
+    console.error(e);
+  }
+}
+
+/* ── This Month ── */
+async function loadMonth() {
+  try {
+    const [mr, tr] = await Promise.all([fetch('api/month'), fetch('api/today')]);
+    const monthData = await mr.json();
+    const todayData = await tr.json();
+
+    let html = '';
+    for (const lbl of ['U1','U2']) {
+      const rows = monthData[lbl];
+      if (!rows || !rows.length) continue;
+      const td = todayData[lbl] || {};
+
+      // Days in deficit/surplus for summary
+      const netRows = rows.filter(r => (r.burned || 0) > 0);
+      const deficitDays  = netRows.filter(r => r.burned - r.calories > 0).length;
+      const surplusDays  = netRows.filter(r => r.burned - r.calories <= 0).length;
+
+      // Month label from first row date
+      const monthLabel = rows.length
+        ? new Date(rows[0].date + 'T12:00:00').toLocaleDateString(undefined, {month:'long', year:'numeric'})
+        : 'This Month';
+
+      html += `<div class="user-block">
+        <div class="section-title">👤 ${editableName(lbl)} — ${monthLabel}</div>
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Daily Net Cal (burned − consumed)</div>
+          <canvas id="mchart-${lbl}" height="130"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">Monthly Summary</div>
+          ${td.monthly_net != null ? metric('Net Cal (total)',
+              `<span style="color:${netColor(td.monthly_net)}">${sign(td.monthly_net)} kcal</span>`) : ''}
+          ${metric('Consumed', `${fmt(td.monthly?.calories ?? 0, 0)} kcal`)}
+          ${netRows.length ? metric('Deficit days', `<span class="green">${deficitDays}</span> / ${netRows.length}`) : ''}
+          ${netRows.length ? metric('Surplus days', `<span class="red">${surplusDays}</span> / ${netRows.length}`) : ''}
+          ${metric('Days tracked', `${td.monthly_days_tracked ?? rows.length}`)}
+          ${metric('Protein', `${fmt(td.monthly?.protein ?? 0)} g`)}
+          ${metric('Fat',     `${fmt(td.monthly?.fat ?? 0)} g`)}
+          ${metric('Carbs',   `${fmt(td.monthly?.carbs ?? 0)} g`)}
+        </div>
+      </div>`;
+    }
+
+    document.getElementById('month-content').innerHTML = html || '<div class="empty">No data for this month yet</div>';
+
+    for (const lbl of ['U1','U2']) {
+      const rows = monthData[lbl];
+      if (!rows || !rows.length) continue;
+      buildNetChart(`mchart-${lbl}`, rows, `month-${lbl}`);
+    }
+  } catch(e) {
+    document.getElementById('month-content').innerHTML =
+      '<div class="empty" style="color:var(--red)">Could not load month data</div>';
     console.error(e);
   }
 }
@@ -647,7 +743,7 @@ async function saveSettings() {
   } catch(e) { console.error('Could not save settings', e); }
 }
 
-// Boot: load settings, then render
+// Boot
 loadSettings().then(() => {
   loadToday();
   setInterval(loadToday, 60_000);
@@ -709,6 +805,18 @@ def api_week():
     return jsonify(result)
 
 
+@app.route("/api/month")
+def api_month():
+    today = today_local()
+    start = month_start(today)
+    result = {}
+    for label in ["U1", "U2"]:
+        rows = store.get_range(label, start.isoformat(), today.isoformat())
+        if rows:
+            result[label] = rows
+    return jsonify(result)
+
+
 @app.route("/api/history")
 def api_history():
     """Return n weeks of history. Query param: ?weeks=4"""
@@ -728,7 +836,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.2.0 starting...")
+    log.info("Kcal Balance v2.3.0 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:

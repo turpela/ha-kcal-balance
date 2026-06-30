@@ -8,6 +8,22 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.3.0] — 2026-06-30
+
+### Added
+- **Monthly Net Cal tracking** — new "This Month" tab with daily net cal bar chart and monthly summary (total net, deficit/surplus day counts, macros)
+- **`/api/month`** endpoint returning current month's daily rows
+- Garmin burned calories now **stored per day** in SQLite (`burned` column in `food_diary`); automatic schema migration for existing installs
+- Weekly Net Cal in weekly summary now sums all stored daily net values (not just today's)
+
+### Changed
+- **Today Energy card**: Net Cal is now the hero number (big font, green/red); Garmin burned moved to metric row below
+- **Weekly bar chart**: bars now show daily Net Cal (burned − consumed) instead of consumed; green = deficit, red = surplus, grey = no Garmin data; break-even reference line at 0
+- `store.py` — `upsert_day()` accepts optional `burned` param; stored value is only overwritten when new value > 0 (backfill calls preserve existing burned data); `aggregate()` now sums burned
+- `config.yaml` bumped to `2.3.0`
+
+---
+
 ## [2.2.0] — 2026-06-30
 
 ### Added

@@ -1,7 +1,6 @@
 """
 store.py — SQLite persistence layer for Kcal Balance.
 
-Replaces weekly_state.json with a proper queryable store.
 Database lives at /data/kcal.db (persisted by HA across restarts).
 """
 
@@ -17,7 +16,7 @@ def _connect():
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist; migrate existing schema."""
     with _connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS food_diary (
@@ -27,10 +26,16 @@ def init_db():
                 protein    REAL NOT NULL DEFAULT 0,
                 fat        REAL NOT NULL DEFAULT 0,
                 carbs      REAL NOT NULL DEFAULT 0,
+                burned     REAL          DEFAULT 0,
                 fetched_at TEXT,
                 PRIMARY KEY (user, date)
             )
         """)
+        # Migration: add burned column for installs that existed before v2.3.0
+        try:
+            conn.execute("ALTER TABLE food_diary ADD COLUMN burned REAL DEFAULT 0")
+        except Exception:
+            pass  # column already exists — safe to ignore
         conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
@@ -39,24 +44,34 @@ def init_db():
         """)
 
 
-def upsert_day(user, date_str, totals):
-    """Insert or update one day's totals for a user."""
+def upsert_day(user, date_str, totals, burned=None):
+    """
+    Insert or update one day's totals for a user.
+
+    burned is optional: if None or 0 the existing stored value is preserved
+    (backfill calls don't have Garmin data and must not clobber live data).
+    """
     with _connect() as conn:
         conn.execute(
             """
-            INSERT INTO food_diary (user, date, calories, protein, fat, carbs, fetched_at)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO food_diary (user, date, calories, protein, fat, carbs, burned, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(user, date) DO UPDATE SET
                 calories   = excluded.calories,
                 protein    = excluded.protein,
                 fat        = excluded.fat,
                 carbs      = excluded.carbs,
+                burned     = CASE
+                               WHEN excluded.burned > 0 THEN excluded.burned
+                               ELSE food_diary.burned
+                             END,
                 fetched_at = excluded.fetched_at
             """,
             (
                 user, date_str,
                 totals["calories"], totals["protein"],
-                totals["fat"],     totals["carbs"],
+                totals["fat"],      totals["carbs"],
+                burned if burned is not None else 0,
             ),
         )
 
@@ -117,9 +132,9 @@ def set_setting(key, value):
 
 
 def aggregate(rows):
-    """Sum calories/protein/fat/carbs across a list of row dicts."""
-    totals = {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0}
+    """Sum calories/protein/fat/carbs/burned across a list of row dicts."""
+    totals = {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0, "burned": 0.0}
     for r in rows:
         for k in totals:
-            totals[k] += r.get(k, 0)
+            totals[k] += r.get(k, 0) or 0
     return {k: round(v, 1) for k, v in totals.items()}
