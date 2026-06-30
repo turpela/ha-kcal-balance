@@ -8,6 +8,29 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.2.0] — 2026-06-30
+
+### Added
+- **GDA-based daily view** — replaced goal/balance cards with:
+  - **Consumed + GDA%** progress bar (green <90%, yellow 90–100%, red >100%)
+  - **Garmin burned + Net Cal** (burned − consumed; green = deficit, red = surplus)
+- **Settings tab** in dashboard — edit user names and GDA (Guideline Daily Amount in kcal) per user; values persist in SQLite
+- **Weekly GDA%** in This Week summary — pro-rated to days elapsed (Mon=1×GDA … Sun=7×GDA)
+- **Net Cal (today)** shown in weekly summary
+- Bar chart bars in This Week now coloured by GDA% (green/yellow/red thresholds)
+- GDA reference line replaces the old daily goal line in the weekly bar chart
+- New HA sensors: `sensor.kcal_u1_gda_pct`, `sensor.kcal_u1_weekly_gda_pct` (and u2 equivalents)
+
+### Changed
+- `config.yaml` bumped to `2.2.0`; removed `u1_goal_mode`, `u1_goal_kcal`, `u1_goal_offset` (and u2 equivalents) — no longer needed
+- `ha.py` — removed goal/balance sensor push; `push_sensors()` now takes GDA/GDA% instead of goal/balance params
+- `app.py` — poller reads `u1_gda`/`u2_gda` from SQLite settings; snapshot replaces goal/balance fields with gda/gda_pct/weekly_gda/weekly_gda_pct
+
+### Removed
+- `sensor.kcal_u1_goal`, `sensor.kcal_u1_balance`, `sensor.kcal_u1_weekly_goal`, `sensor.kcal_u1_weekly_balance` (and u2 equivalents)
+
+---
+
 ## [2.1.1] — 2026-06-29
 
 ### Fixed

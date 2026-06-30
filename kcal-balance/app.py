@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Kcal Balance add-on — v2.0.0
+Kcal Balance add-on — v2.2.0
 
 Architecture:
   - Flask web server (port 8080) served via HA ingress → dashboard in sidebar
   - Background polling thread → FatSecret every scan_interval seconds
-  - SQLite /data/kcal.db → persistent history (replaces weekly_state.json)
+  - SQLite /data/kcal.db → persistent history
   - HA sensor push → thin layer for automations/notifications
 
 Modules:
@@ -47,7 +47,7 @@ OPTIONS_FILE   = "/data/options.json"
 TIMEZONE       = ZoneInfo("Europe/Helsinki")
 DEFAULT_GARMIN = {"U1": "sensor.garmin_connect_calories",
                   "U2": "sensor.garmin_connect_calories_2"}
-DEFAULT_OFFSETS = {"weight_loss": -500, "maintenance": 0, "muscle_gain": 300}
+DEFAULT_GDA    = 2000.0
 
 # ---------------------------------------------------------------------------
 # Date helpers
@@ -65,19 +65,6 @@ def week_dates(d):
     return [monday + timedelta(days=i) for i in range(d.weekday() + 1)]
 
 # ---------------------------------------------------------------------------
-# Goal computation
-# ---------------------------------------------------------------------------
-
-def compute_goal(user, burned):
-    """Return (goal_kcal: float|None, source: str)."""
-    offset = user["goal_offset"] or DEFAULT_OFFSETS.get(user["goal_mode"], 0)
-    if burned is not None:
-        return round(burned + offset, 1), "garmin"
-    if user["goal_kcal"]:
-        return float(user["goal_kcal"]), "fixed"
-    return None, "none"
-
-# ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
 
@@ -91,17 +78,14 @@ def _strip(v):
 def build_user_list(opts):
     def _user(label, suffix, prefix):
         return {
-            "label":        label,
-            "suffix":       suffix,
+            "label":  label,
+            "suffix": suffix,
             "creds": {
                 "consumer_key":        _strip(opts.get(f"{prefix}consumer_key")),
                 "consumer_secret":     _strip(opts.get(f"{prefix}consumer_secret")),
                 "access_token":        _strip(opts.get(f"{prefix}access_token")),
                 "access_token_secret": _strip(opts.get(f"{prefix}access_token_secret")),
             },
-            "goal_mode":    opts.get(f"{prefix}goal_mode", "maintenance"),
-            "goal_kcal":    opts.get(f"{prefix}goal_kcal") or 0,
-            "goal_offset":  opts.get(f"{prefix}goal_offset") or 0,
             "garmin_entity": _strip(opts.get(f"{prefix}garmin_entity"))
                              or DEFAULT_GARMIN[label],
         }
@@ -118,15 +102,15 @@ def build_user_list(opts):
 # Shared state (updated by poller, read by API routes)
 # ---------------------------------------------------------------------------
 _state_lock = threading.Lock()
-_state = {}      # label → dict with today's snapshot
-_users = []      # list of user dicts (set in main before thread starts)
+_state = {}
+_users = []
 
 # ---------------------------------------------------------------------------
 # Background polling thread
 # ---------------------------------------------------------------------------
 
 def _poll_loop(users, supervisor_token, scan_interval):
-    # Backfill any missing week days from FatSecret history on startup
+    # Backfill missing week days from FatSecret history on startup
     today = today_local()
     for user in users:
         for d in week_dates(today):
@@ -157,35 +141,34 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 # Garmin: burned calories
                 burned = ha.ha_get(supervisor_token, user["garmin_entity"])
 
-                # Goal
-                goal, goal_source = compute_goal(user, burned)
+                # GDA from settings (editable in dashboard Settings tab)
+                gda     = float(store.get_setting(f"{suffix}_gda", DEFAULT_GDA))
+                gda_pct = round(totals["calories"] / gda * 100, 1) if gda > 0 else None
+
+                # Net energy: burned − consumed (positive = deficit)
+                net = round(burned - totals["calories"], 1) if burned is not None else None
 
                 # Weekly totals from DB
                 week_rows     = store.get_range(label, monday.isoformat(), today_str)
                 weekly_totals = store.aggregate(week_rows)
                 days_tracked  = len(week_rows)
-                # Goal is pro-rated: daily_goal × days elapsed (Mon=1 … Sun=7)
                 days_elapsed  = len(week_dates(today))
-                weekly_goal   = round(goal * days_elapsed, 1) if goal is not None else None
 
-                # Balance / net
-                balance         = round(goal - totals["calories"], 1) if goal is not None else None
-                net             = round(burned - totals["calories"], 1) if burned is not None else None
-                weekly_balance  = round(weekly_goal - weekly_totals["calories"], 1) \
-                                  if weekly_goal is not None else None
+                # Pro-rated weekly GDA: daily GDA × days elapsed (Mon=1 … Sun=7)
+                weekly_gda     = round(gda * days_elapsed, 1) if gda > 0 else None
+                weekly_gda_pct = round(weekly_totals["calories"] / weekly_gda * 100, 1) \
+                                 if weekly_gda and weekly_gda > 0 else None
 
                 snapshot = {
                     "label":          label,
                     "today":          totals,
                     "burned":         burned,
-                    "goal":           goal,
-                    "goal_mode":      user["goal_mode"],
-                    "goal_source":    goal_source,
-                    "balance":        balance,
+                    "gda":            gda,
+                    "gda_pct":        gda_pct,
                     "net":            net,
                     "weekly":         weekly_totals,
-                    "weekly_goal":    weekly_goal,
-                    "weekly_balance": weekly_balance,
+                    "weekly_gda":     weekly_gda,
+                    "weekly_gda_pct": weekly_gda_pct,
                     "days_tracked":   days_tracked,
                     "days_elapsed":   days_elapsed,
                     "last_updated":   datetime.now(TIMEZONE).isoformat(),
@@ -198,18 +181,19 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 try:
                     ha.push_sensors(
                         supervisor_token, suffix, label,
-                        totals, burned, goal, user["goal_mode"], goal_source,
-                        weekly_totals, weekly_goal, days_tracked,
+                        totals, burned, net,
+                        gda, gda_pct,
+                        weekly_totals, weekly_gda, weekly_gda_pct, days_tracked,
                     )
                 except Exception as exc:
                     log.warning("[%s] Sensor push error: %s", label, exc)
 
                 log.info(
-                    "[%s] Consumed %.0f kcal | Goal: %s | Balance: %s | Burned: %s",
+                    "[%s] Consumed %.0f kcal | GDA: %s%% | Net: %s | Burned: %s",
                     label,
                     totals["calories"],
-                    f"{goal:.0f}"    if goal    is not None else "N/A",
-                    f"{balance:+.0f}" if balance is not None else "N/A",
+                    f"{gda_pct:.1f}" if gda_pct is not None else "N/A",
+                    f"{net:+.0f}"    if net     is not None else "N/A",
                     f"{burned:.0f}"  if burned  is not None else "N/A",
                 )
 
@@ -289,7 +273,7 @@ body {
   background: rgba(255,255,255,0.08); margin: 10px 0 3px; overflow: hidden;
 }
 .bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
-.bar-pct { font-size: 11px; color: var(--sub); }
+.bar-label { font-size: 11px; }
 /* ── Metric rows ── */
 .metric {
   display: flex; justify-content: space-between; align-items: center;
@@ -318,6 +302,30 @@ body {
   outline: none; background: rgba(255,255,255,0.12);
   box-shadow: 0 0 0 2px var(--blue);
 }
+/* ── Settings panel ── */
+.settings-block { margin-bottom: 24px; }
+.settings-block h3 {
+  font-size: 16px; font-weight: 600; margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.field { margin-bottom: 12px; }
+.field label {
+  display: block; font-size: 12px; color: var(--sub);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px;
+}
+.field input {
+  width: 100%; padding: 9px 12px; background: var(--card2);
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-size: 15px;
+}
+.field input:focus { outline: none; border-color: var(--blue); }
+.btn-save {
+  padding: 9px 24px; background: var(--blue); color: #fff;
+  border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: opacity .15s;
+}
+.btn-save:hover { opacity: .85; }
+.save-msg { font-size: 13px; color: var(--green); margin-left: 12px; display: none; }
 </style>
 </head>
 <body>
@@ -325,25 +333,29 @@ body {
 <div class="tabs">
   <button class="tab active" onclick="showTab('today',this)">Today</button>
   <button class="tab"        onclick="showTab('week',this)">This Week</button>
+  <button class="tab"        onclick="showTab('settings',this)">Settings</button>
 </div>
 
-<div id="today" class="panel active">
-  <div id="today-content"><div class="empty">Loading…</div></div>
-</div>
-<div id="week" class="panel">
-  <div id="week-content"><div class="empty">Loading…</div></div>
-</div>
+<div id="today"    class="panel active"><div id="today-content"><div class="empty">Loading…</div></div></div>
+<div id="week"     class="panel"><div id="week-content"><div class="empty">Loading…</div></div></div>
+<div id="settings" class="panel"><div id="settings-content"><div class="empty">Loading…</div></div></div>
 
 <div class="footer" id="footer"></div>
 
 <script>
 /* ── Utilities ── */
-function clr(v) {
-  if (v == null) return 'var(--sub)';
-  return v >= 100 ? 'var(--green)' : v >= 0 ? 'var(--yellow)' : 'var(--red)';
+function gdaColor(pct) {
+  if (pct == null) return 'var(--sub)';
+  if (pct < 90)   return 'var(--green)';
+  if (pct <= 100) return 'var(--yellow)';
+  return 'var(--red)';
 }
-function sign(v) { return v != null ? (v >= 0 ? '+' : '') + v.toFixed(0) : '—'; }
-function fmt(v, dec=1) { return v != null ? v.toFixed(dec) : '—'; }
+function netColor(v) {
+  if (v == null) return 'var(--sub)';
+  return v >= 0 ? 'var(--green)' : 'var(--red)';
+}
+function sign(v) { return v != null ? (v >= 0 ? '+' : '') + Math.round(v) : '—'; }
+function fmt(v, dec=1) { return v != null ? Number(v).toFixed(dec) : '—'; }
 
 function metric(label, valueHtml) {
   return `<div class="metric">
@@ -353,18 +365,20 @@ function metric(label, valueHtml) {
 }
 
 /* ── Settings / user names ── */
-let _names = { U1: 'User 1', U2: 'User 2' };
+let _settings = { u1_name: 'User 1', u2_name: 'User 2', u1_gda: 2000, u2_gda: 2000 };
 
 async function loadSettings() {
   try {
     const r = await fetch('api/settings');
     const s = await r.json();
-    _names.U1 = s.u1_name || 'User 1';
-    _names.U2 = s.u2_name || 'User 2';
+    _settings.u1_name = s.u1_name || 'User 1';
+    _settings.u2_name = s.u2_name || 'User 2';
+    _settings.u1_gda  = s.u1_gda  || 2000;
+    _settings.u2_gda  = s.u2_gda  || 2000;
   } catch(e) { /* keep defaults */ }
 }
 
-function nameKey(lbl) { return lbl === 'U1' ? 'u1_name' : 'u2_name'; }
+function userName(lbl) { return lbl === 'U1' ? _settings.u1_name : _settings.u2_name; }
 
 function editableName(lbl) {
   return `<span
@@ -374,21 +388,21 @@ function editableName(lbl) {
     data-lbl="${lbl}"
     onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
     onblur="saveName(this)"
-  >${_names[lbl]}</span>`;
+  >${userName(lbl)}</span>`;
 }
 
 async function saveName(el) {
   const lbl  = el.dataset.lbl;
+  const key  = lbl === 'U1' ? 'u1_name' : 'u2_name';
   const name = el.textContent.trim() || (lbl === 'U1' ? 'User 1' : 'User 2');
-  el.textContent = name;          // normalise whitespace
-  _names[lbl] = name;
+  el.textContent = name;
+  _settings[key] = name;
   try {
     await fetch('api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [nameKey(lbl)]: name }),
+      body: JSON.stringify({ [key]: name }),
     });
-    // sync the other tab's heading if visible
     document.querySelectorAll(`[data-lbl="${lbl}"].user-name`).forEach(e => {
       if (e !== el) e.textContent = name;
     });
@@ -402,13 +416,15 @@ function showTab(name, btn) {
   btn.classList.add('active');
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === name));
   if (name === 'week' && !weekLoaded) { loadWeek(); weekLoaded = true; }
+  if (name === 'settings') renderSettings();
 }
 
 /* ── Today ── */
 function renderUserToday(d) {
-  const t = d.today || {};
-  const pct = d.goal ? Math.min(100, (t.calories / d.goal) * 100) : 0;
-  const barC = d.balance == null ? 'var(--sub)' : d.balance >= 0 ? 'var(--green)' : 'var(--red)';
+  const t   = d.today || {};
+  const pct = d.gda_pct ?? 0;
+  const barW = Math.min(100, pct).toFixed(1);
+  const barC = gdaColor(pct);
 
   return `
   <div class="grid">
@@ -418,26 +434,25 @@ function renderUserToday(d) {
         <span class="big-num">${fmt(t.calories, 0)}</span>
         <span class="big-unit">kcal</span>
       </div>
-      ${d.goal ? `
-        <div class="bar-wrap"><div class="bar-fill" style="width:${pct.toFixed(0)}%;background:${barC}"></div></div>
-        <div class="bar-pct">${pct.toFixed(0)}% of ${fmt(d.goal,0)} kcal goal</div>
-      ` : '<div class="big-sub muted">No goal configured</div>'}
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:${barW}%;background:${barC}"></div>
+      </div>
+      <div class="bar-label" style="color:${barC}">${pct.toFixed(1)}% of GDA (${fmt(d.gda, 0)} kcal)</div>
     </div>
 
     <div class="card">
-      <div class="card-title">Balance</div>
-      ${d.balance != null ? `
-        <div class="big">
-          <span class="big-num" style="color:${clr(d.balance)}">${sign(d.balance)}</span>
-          <span class="big-unit">kcal</span>
-        </div>
-        <div class="big-sub muted">${d.balance >= 0 ? 'remaining' : 'over goal'}</div>
-      ` : '<div class="big-num muted">—</div><div class="big-sub muted">set a goal to see balance</div>'}
-
+      <div class="card-title">Energy</div>
       ${d.burned != null ? `
-        ${metric('Garmin burned', `<span class="blue">${fmt(d.burned,0)} kcal</span>`)}
-        ${metric('Net energy', `<span style="color:${clr(d.net)}">${sign(d.net)} kcal</span>`)}
-      ` : ''}
+        <div class="big">
+          <span class="big-num blue">${fmt(d.burned, 0)}</span>
+          <span class="big-unit">kcal burned</span>
+        </div>
+        ${metric('Net Cal', `<span style="color:${netColor(d.net)}">${sign(d.net)} kcal</span>`)}
+        <div class="big-sub muted" style="margin-top:6px">${d.net != null ? (d.net >= 0 ? 'deficit' : 'surplus') : ''}</div>
+      ` : `
+        <div class="big-num muted">—</div>
+        <div class="big-sub muted" style="margin-top:6px">Garmin not connected</div>
+      `}
     </div>
 
     <div class="card" style="grid-column:1/-1">
@@ -496,23 +511,23 @@ async function loadWeek() {
     for (const lbl of ['U1','U2']) {
       const rows = weekData[lbl];
       if (!rows || !rows.length) continue;
-      const td = todayData[lbl] || {};
-      const userNum = lbl === 'U1' ? '1' : '2';
+      const td  = todayData[lbl] || {};
+      const gda = td.gda || 2000;
 
       html += `<div class="user-block">
         <div class="section-title">👤 ${editableName(lbl)} — This Week</div>
         <div class="card" style="margin-bottom:10px">
-          <div class="card-title">Daily Calories</div>
+          <div class="card-title">Daily Calories vs GDA</div>
           <canvas id="chart-${lbl}" height="110"></canvas>
         </div>
         <div class="card">
           <div class="card-title">Weekly Summary</div>
           ${metric('Consumed', `${fmt(td.weekly?.calories ?? 0, 0)} kcal`)}
-          ${td.weekly_goal != null ? metric(
-              `Goal (${td.days_elapsed ?? 1} day${(td.days_elapsed ?? 1) !== 1 ? 's' : ''})`,
-              `${fmt(td.weekly_goal,0)} kcal`) : ''}
-          ${td.weekly_balance != null ? metric('Balance',
-              `<span style="color:${clr(td.weekly_balance)}">${sign(td.weekly_balance)} kcal</span>`) : ''}
+          ${td.weekly_gda_pct != null ? metric(
+              `GDA% (${td.days_elapsed ?? 1} day${(td.days_elapsed ?? 1) !== 1 ? 's' : ''})`,
+              `<span style="color:${gdaColor(td.weekly_gda_pct)}">${fmt(td.weekly_gda_pct, 1)}%</span>`) : ''}
+          ${td.net != null ? metric('Net Cal (today)',
+              `<span style="color:${netColor(td.net)}">${sign(td.net)} kcal</span>`) : ''}
           ${metric('Days tracked', `${td.days_tracked ?? rows.length} / ${td.days_elapsed ?? 7}`)}
           ${metric('Protein', `${fmt(td.weekly?.protein ?? 0)} g`)}
           ${metric('Fat',     `${fmt(td.weekly?.fat ?? 0)} g`)}
@@ -527,37 +542,37 @@ async function loadWeek() {
     for (const lbl of ['U1','U2']) {
       const rows = weekData[lbl];
       if (!rows || !rows.length) continue;
-      const td        = todayData[lbl] || {};
-      const dailyGoal = td.goal;
-      const canvas    = document.getElementById(`chart-${lbl}`);
+      const td  = todayData[lbl] || {};
+      const gda = td.gda || 2000;
+      const canvas = document.getElementById(`chart-${lbl}`);
       if (!canvas) continue;
 
-      if (chartInstances[lbl]) { chartInstances[lbl].destroy(); }
+      if (chartInstances[lbl]) chartInstances[lbl].destroy();
 
-      const labels = rows.map(r => {
+      const chartLabels = rows.map(r => {
         const d = new Date(r.date + 'T12:00:00');
         return d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'});
       });
       const calories = rows.map(r => r.calories);
-      const colors   = calories.map(c =>
-        !dailyGoal ? 'rgba(10,132,255,.75)'
-        : c <= dailyGoal ? 'rgba(48,209,88,.75)' : 'rgba(255,69,58,.75)'
-      );
+      const colors   = calories.map(c => {
+        const p = (c / gda) * 100;
+        return p < 90 ? 'rgba(48,209,88,.75)' : p <= 100 ? 'rgba(255,214,10,.75)' : 'rgba(255,69,58,.75)';
+      });
 
       chartInstances[lbl] = new Chart(canvas, {
         data: {
-          labels,
+          labels: chartLabels,
           datasets: [
             {
               type: 'bar', label: 'Calories', data: calories,
               backgroundColor: colors, borderRadius: 5,
             },
-            ...(dailyGoal ? [{
-              type: 'line', label: 'Daily Goal',
-              data: rows.map(() => dailyGoal),
+            {
+              type: 'line', label: 'GDA',
+              data: rows.map(() => gda),
               borderColor: 'rgba(255,214,10,.9)', borderDash: [5,4],
               pointRadius: 0, fill: false, borderWidth: 1.5,
-            }] : []),
+            },
           ],
         },
         options: {
@@ -577,7 +592,62 @@ async function loadWeek() {
   }
 }
 
-// Boot: load settings first, then render
+/* ── Settings panel ── */
+function renderSettings() {
+  let html = '';
+  for (const lbl of ['U1', 'U2']) {
+    const sfx     = lbl.toLowerCase();
+    const nameKey = `${sfx}_name`;
+    const gdaKey  = `${sfx}_gda`;
+    const nameVal = (_settings[nameKey] || '').replace(/"/g, '&quot;');
+    const gdaVal  = _settings[gdaKey]  || 2000;
+    html += `
+    <div class="settings-block">
+      <h3>${lbl === 'U1' ? 'User 1' : 'User 2'}</h3>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="set-${nameKey}" value="${nameVal}" maxlength="40" placeholder="${lbl === 'U1' ? 'User 1' : 'User 2'}">
+      </div>
+      <div class="field">
+        <label>GDA — Guideline Daily Amount (kcal)</label>
+        <input type="number" id="set-${gdaKey}" value="${gdaVal}" min="500" max="9999" step="50">
+      </div>
+    </div>`;
+  }
+  html += `
+  <button class="btn-save" onclick="saveSettings()">Save</button>
+  <span class="save-msg" id="save-msg">Saved!</span>`;
+  document.getElementById('settings-content').innerHTML = html;
+}
+
+async function saveSettings() {
+  const payload = {};
+  for (const lbl of ['U1', 'U2']) {
+    const sfx = lbl.toLowerCase();
+    const nameEl = document.getElementById(`set-${sfx}_name`);
+    const gdaEl  = document.getElementById(`set-${sfx}_gda`);
+    if (nameEl) {
+      const name = nameEl.value.trim();
+      if (name) { payload[`${sfx}_name`] = name; _settings[`${sfx}_name`] = name; }
+    }
+    if (gdaEl) {
+      const gda = parseFloat(gdaEl.value);
+      if (gda > 0) { payload[`${sfx}_gda`] = gda; _settings[`${sfx}_gda`] = gda; }
+    }
+  }
+  try {
+    await fetch('api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const msg = document.getElementById('save-msg');
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  } catch(e) { console.error('Could not save settings', e); }
+}
+
+// Boot: load settings, then render
 loadSettings().then(() => {
   loadToday();
   setInterval(loadToday, 60_000);
@@ -597,6 +667,8 @@ def api_settings_get():
     return jsonify({
         "u1_name": store.get_setting("u1_name", "User 1"),
         "u2_name": store.get_setting("u2_name", "User 2"),
+        "u1_gda":  float(store.get_setting("u1_gda", DEFAULT_GDA)),
+        "u2_gda":  float(store.get_setting("u2_gda", DEFAULT_GDA)),
     })
 
 
@@ -605,9 +677,17 @@ def api_settings_post():
     data = request.get_json(silent=True) or {}
     for key in ("u1_name", "u2_name"):
         if key in data:
-            name = str(data[key]).strip()[:40]  # cap at 40 chars
+            name = str(data[key]).strip()[:40]
             if name:
                 store.set_setting(key, name)
+    for key in ("u1_gda", "u2_gda"):
+        if key in data:
+            try:
+                gda = float(data[key])
+                if 100 <= gda <= 99999:
+                    store.set_setting(key, str(gda))
+            except (ValueError, TypeError):
+                pass
     return jsonify({"ok": True})
 
 
@@ -648,7 +728,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.0.0 starting...")
+    log.info("Kcal Balance v2.2.0 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
@@ -663,11 +743,9 @@ def main():
     users         = build_user_list(opts)
     scan_interval = int(opts.get("scan_interval", 300))
 
-    # Expose users to API routes (for future use)
     global _users
     _users = users
 
-    # Start background poller thread (daemon so Flask shutdown kills it)
     t = threading.Thread(
         target=_poll_loop,
         args=(users, supervisor_token, scan_interval),
@@ -675,7 +753,6 @@ def main():
     )
     t.start()
 
-    # Start Flask (use_reloader=False — we manage our own background thread)
     log.info("Web UI on http://0.0.0.0:8080")
     app.run(host="0.0.0.0", port=8080, debug=False, use_reloader=False)
 
