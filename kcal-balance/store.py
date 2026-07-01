@@ -131,6 +131,23 @@ def set_setting(key, value):
         )
 
 
+def update_burned(user, date_str, burned):
+    """
+    Update the burned value for an existing day using MAX(new, existing).
+
+    Used for day-boundary carry-over: after midnight the Garmin sensor may
+    still show yesterday's final reading; we push it here without touching
+    the food columns.  No-op if the row doesn't exist yet.
+    """
+    if not burned or burned <= 0:
+        return
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE food_diary SET burned = MAX(burned, ?) WHERE user=? AND date=?",
+            (burned, user, date_str),
+        )
+
+
 def aggregate(rows):
     """Sum calories/protein/fat/carbs/burned across a list of row dicts."""
     totals = {"calories": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0, "burned": 0.0}

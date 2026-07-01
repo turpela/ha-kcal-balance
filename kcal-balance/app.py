@@ -141,8 +141,28 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 if totals is None:
                     continue
 
-                # Garmin: burned calories (read before storing so we persist it)
-                burned = ha.ha_get(supervisor_token, user["garmin_entity"])
+                # Garmin: burned calories + the date the sensor value last changed
+                burned, garmin_date = ha.ha_get(supervisor_token, user["garmin_entity"])
+
+                # ── Day-boundary carry-over ────────────────────────────────
+                # Garmin's last cloud sync before midnight may be 1–3 h early.
+                # After midnight the sensor still shows yesterday's final value
+                # until the integration fetches today's data.  Detect this by
+                # comparing the sensor's last_changed date to today:
+                #   • garmin_date == yesterday → sensor is stale; carry the
+                #     value to yesterday's DB record (MAX so we never go back),
+                #     then treat today's burned as unknown.
+                #   • garmin_date == today     → fresh data for today; use it.
+                #   • garmin_date == None      → can't tell; treat as today.
+                yesterday = today - timedelta(days=1)
+                if garmin_date is not None and garmin_date == yesterday:
+                    if store.has_day(label, yesterday.isoformat()):
+                        store.update_burned(label, yesterday.isoformat(), burned)
+                        log.debug(
+                            "[%s] Garmin carry-over: %.0f kcal saved to %s",
+                            label, burned, yesterday,
+                        )
+                    burned = None  # today's data not yet available from Garmin
 
                 # Persist food + burned for today
                 store.upsert_day(label, today_str, totals, burned=burned)
@@ -836,7 +856,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.3.0 starting...")
+    log.info("Kcal Balance v2.3.1 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:

@@ -8,6 +8,15 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.3.1] — 2026-06-30
+
+### Fixed
+- **Garmin midnight gap** — Garmin's last cloud sync before midnight can be 1–3 hours early, causing the final burned calories to be missing from the stored daily record. Fix: `ha_get()` now also reads the sensor's `last_changed` timestamp. After midnight, if Garmin's sensor still shows yesterday's date, the value is carried over to yesterday's DB record (`MAX` logic so we never go backward) and today's burned is left unset until Garmin actually syncs for the new day. Logged at DEBUG as `"Garmin carry-over"`.
+- `ha.py` — `ha_get()` now returns `(value, sensor_date)` tuple; `sensor_date` is the Helsinki-local date when the sensor value last changed
+- `store.py` — new `update_burned(user, date_str, burned)` function: updates burned for an existing row using `MAX(new, existing)`; used for carry-over without touching food columns
+
+---
+
 ## [2.3.0] — 2026-06-30
 
 ### Added
