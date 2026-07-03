@@ -1,26 +1,32 @@
 # Kcal Balance — Home Assistant Add-On
 
-A Home Assistant add-on that tracks daily calorie balance for up to two users, combining FatSecret food diary data with Garmin Connect activity data.
+A Home Assistant add-on that tracks daily calorie balance for up to two users using FatSecret food diary and Garmin activity data. Everything is pulled from FatSecret — no separate Garmin integration required.
 
 ## Features
 
 - **Web dashboard** served via HA ingress — appears as a native sidebar panel, no YAML needed
-- **Today view** — calories consumed, daily goal, balance, net energy (burned − consumed), macros
-- **This Week view** — bar chart of daily calories vs goal, weekly totals and macros
+- **Today view** — Net Cal hero card (burned − consumed), Consumed + GDA% progress bar, macros
+- **This Week view** — daily net cal bar chart (green = deficit, red = surplus), weekly summary
+- **This Month view** — monthly net cal bar chart, monthly totals and deficit/surplus day counts
+- **Settings tab** — editable user names and GDA (Guideline Daily Amount) per user
 - **HA sensors** — thin sensor layer for automations and notifications
 - **SQLite history** — full diary history queryable via `/api/history`
 - **Two-user support** — side-by-side tracking for two people in one household
-- **Garmin integration** — reads burned calories from the [Garmin Connect HACS integration](https://github.com/cyberjunky/home-assistant-garmin_connect)
 - **Auto-refresh** — dashboard updates every 60 seconds
 
-## Architecture
+## How It Works
+
+FatSecret is the single data source for both food and burned calories:
+
+- `food_entries.get.v2` — food diary (consumed kcal + macros)
+- `exercise_entries.get` — Garmin daily summary (finalized burned kcal, synced by FatSecret from Garmin after each day ends)
+
+No Garmin Connect HACS integration is needed. FatSecret receives the complete, finalized daily calorie total from Garmin — avoiding the midnight-gap issue that affects live Garmin sensor polling.
 
 ```
 FatSecret API ──► background poller ──► SQLite /data/kcal.db ──► Flask web UI (ingress)
-                         │
-                         ├──► HA sensor push (for automations)
-                         │
-Garmin HACS ──► HA sensor ──► ha_get() (read on each poll)
+  food_entries.get.v2   (consumed kcal + macros)       │
+  exercise_entries.get  (Garmin burned kcal, finalized) ├──► HA sensor push
 ```
 
 ## Installation
@@ -31,75 +37,90 @@ Garmin HACS ──► HA sensor ──► ha_get() (read on each poll)
 4. Configure the add-on (see [Configuration](#configuration))
 5. Click **Start**
 
-The dashboard appears automatically in the HA sidebar as **Kcal Balance**.
+The **Kcal Balance** panel appears automatically in the HA sidebar.
 
 ## Prerequisites
 
-### FatSecret credentials
-
-Each user needs a FatSecret developer account and OAuth 1.0 credentials:
+Each user needs a FatSecret developer account with OAuth 1.0 credentials, and their FatSecret account must be connected to their Garmin account (so FatSecret receives the daily activity summary).
 
 1. Register at [platform.fatsecret.com](https://platform.fatsecret.com/api/Default.aspx?screen=r)
 2. Create an application — note your **Consumer Key** and **Consumer Secret**
-3. Run the one-time OAuth flow using `fatsecret/fatsecret_auth.py` to obtain an **Access Token** and **Access Token Secret**
+3. Run the one-time OAuth flow using `fatsecret/fatsecret_auth.py` to obtain an **Access Token** and **Access Token Secret** for each user
 
 See `fatsecret/FATSECRET_SETUP.md` for the full walkthrough.
 
-### Garmin Connect (optional but recommended)
-
-Install the [Garmin Connect integration](https://github.com/cyberjunky/home-assistant-garmin_connect) via HACS. After setup, note your calories sensor entity ID (e.g. `sensor.garmin_connect_calories`) from **Developer Tools → States**.
+> **Garmin connection:** In the FatSecret mobile app, go to **Me → Connected Apps** and connect your Garmin account. FatSecret will then receive daily burned calorie summaries from Garmin automatically.
 
 ## Configuration
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `u1_consumer_key` | string | — | FatSecret Consumer Key for User 1 |
-| `u1_consumer_secret` | password | — | FatSecret Consumer Secret for User 1 |
+| `u1_consumer_key` | string | — | FatSecret Consumer Key (same for both users) |
+| `u1_consumer_secret` | password | — | FatSecret Consumer Secret |
 | `u1_access_token` | string | — | FatSecret Access Token for User 1 |
 | `u1_access_token_secret` | password | — | FatSecret Access Token Secret for User 1 |
-| `u1_goal_mode` | list | `maintenance` | Goal mode: `weight_loss` (−500 kcal), `maintenance` (0), `muscle_gain` (+300 kcal) |
-| `u1_goal_kcal` | int | — | Fixed daily goal in kcal (ignored if Garmin is connected) |
-| `u1_goal_offset` | int | — | Override the default offset for the chosen goal mode |
-| `u1_garmin_entity` | string | `sensor.garmin_connect_calories` | Entity ID of the Garmin calories sensor |
-| `u2_*` | — | — | Same options for User 2 (all optional — omit to run single-user) |
+| `u2_consumer_key` | string | — | FatSecret Consumer Key for User 2 (optional) |
+| `u2_consumer_secret` | password | — | FatSecret Consumer Secret for User 2 |
+| `u2_access_token` | string | — | FatSecret Access Token for User 2 |
+| `u2_access_token_secret` | password | — | FatSecret Access Token Secret for User 2 |
 | `scan_interval` | int | `300` | FatSecret polling interval in seconds |
 
-### Goal calculation
+User 2 is optional — omit all `u2_*` fields to run in single-user mode.
 
-When a Garmin entity is configured and readable:
-```
-daily_goal = garmin_burned + offset
-```
-where offset is `goal_offset` if set, otherwise the default for `goal_mode` (−500 / 0 / +300).
+### GDA (Guideline Daily Amount)
 
-When Garmin is unavailable, `goal_kcal` is used as a fixed goal.
+GDA is set per-user in the **Settings tab** of the dashboard (not in the add-on config). It defaults to 2000 kcal and is persisted in SQLite across restarts. The GDA is used to colour the consumed progress bar and compute weekly GDA%.
+
+## Dashboard
+
+### Today
+
+| Card | Content |
+|------|---------|
+| **Net Cal** | Burned − consumed (green = deficit, red = surplus); Garmin burned shown below |
+| **Consumed** | Total kcal eaten today; GDA% progress bar colour: green <90%, yellow 90–100%, red >100% |
+| **Macros** | Protein / Fat / Carbs in grams |
+
+### This Week
+
+- Bar chart: daily Net Cal per day (green = deficit, red = surplus, grey = no Garmin data)
+- Summary: weekly net, consumed, GDA%, days tracked, macros
+
+### This Month
+
+- Bar chart: daily Net Cal for the current month
+- Summary: monthly net, consumed, deficit/surplus day counts, macros
+
+### Settings
+
+- Edit User 1 / User 2 display names (also editable inline by clicking the name in Today/Week/Month)
+- Set GDA per user
 
 ## HA Sensors
 
-These sensors are pushed on every poll and can be used in automations:
+Pushed on every poll, available for automations and dashboards:
 
 | Sensor | Description |
 |--------|-------------|
-| `sensor.fatsecret_u1` | Calories consumed today; attributes: `protein`, `fat`, `carbs` |
-| `sensor.kcal_u1_goal` | Daily calorie goal; attributes: `goal_mode`, `source` |
-| `sensor.kcal_u1_balance` | Goal − consumed (positive = room left); attributes: `status` |
-| `sensor.kcal_u1_net` | Garmin burned − consumed; attributes: `status` |
-| `sensor.kcal_u1_weekly_consumed` | This week's total; attributes: `protein`, `fat`, `carbs`, `days_tracked` |
-| `sensor.kcal_u1_weekly_goal` | Weekly goal (daily goal × 7) |
-| `sensor.kcal_u1_weekly_balance` | Weekly goal − weekly consumed |
+| `sensor.fatsecret_u1` | Calories consumed today; attrs: `protein`, `fat`, `carbs` |
+| `sensor.kcal_u1_net` | Burned − consumed; attrs: `consumed`, `burned`, `status` |
+| `sensor.kcal_u1_gda_pct` | Consumed as % of GDA; attrs: `gda`, `consumed` |
+| `sensor.kcal_u1_weekly_consumed` | This week's consumed total; attrs: macros, `days_tracked` |
+| `sensor.kcal_u1_weekly_gda_pct` | Weekly consumed as % of pro-rated GDA |
 
 User 2 mirrors all sensors with `_u2` suffix.
 
 ## Web API
 
-The add-on exposes a small REST API (accessible via ingress):
-
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Dashboard web UI |
 | `GET /api/today` | Current snapshot for all users (JSON) |
-| `GET /api/week` | This week's daily rows from SQLite (JSON) |
+| `GET /api/week` | This week's daily rows (JSON) |
+| `GET /api/month` | This month's daily rows (JSON) |
 | `GET /api/history?weeks=4` | N weeks of daily history (JSON) |
+| `GET /api/settings` | User names and GDA values (JSON) |
+| `POST /api/settings` | Update names / GDA values |
 
 ## Project Structure
 
@@ -111,27 +132,30 @@ ha-kcal-balance/
 ├── kcal-balance/
 │   ├── config.yaml              # Add-on manifest (version, schema, ingress)
 │   ├── Dockerfile               # python:3.11-alpine + flask + requests-oauthlib
-│   ├── app.py                   # Flask web app + background poller
-│   ├── fatsecret.py             # FatSecret API client (OAuth 1.0)
+│   ├── app.py                   # Flask web app + background poller (main entry)
+│   ├── fatsecret.py             # FatSecret API client — food + burned calories
 │   ├── ha.py                    # HA Supervisor API helpers + sensor push
 │   ├── store.py                 # SQLite persistence layer
 │   └── CHANGELOG.md             # Add-on version history
-├── fatsecret/
-│   ├── fatsecret_auth.py        # One-time OAuth flow to obtain tokens
-│   └── FATSECRET_SETUP.md       # FatSecret developer setup guide
-└── garmin/
-    └── GARMIN_SETUP.md          # Garmin Connect HACS integration guide
+└── fatsecret/
+    ├── fatsecret_auth.py        # One-time OAuth 1.0 flow to obtain user tokens
+    ├── fatsecret_test.py        # Local test: verifies food diary fetch
+    └── exercise_test.py         # Local test: verifies burned calorie fetch
 ```
+
+> The `garmin/` directory contains legacy setup guides for the Garmin Connect HACS integration, which is no longer required by this add-on as of v2.4.0.
 
 ## Troubleshooting
 
-**Dashboard doesn't appear in sidebar** — Restart the add-on. Ingress is registered on startup.
+**Dashboard doesn't appear in sidebar** — Restart the add-on. The ingress panel is registered on startup.
 
-**FatSecret error 8 (Invalid signature)** — Check your credentials for typos.
+**FatSecret error 8 (Invalid signature)** — Check your credentials for typos. Re-run `fatsecret_auth.py` if needed.
 
-**Garmin sensor unavailable / 404** — Check the entity ID in Developer Tools → States. Set `u1_garmin_entity` to the exact ID.
+**Net Cal shows `—`** — FatSecret hasn't received a Garmin daily summary yet for today (normal until mid-morning). Yesterday's value should always be present. Verify the Garmin connection is active in the FatSecret app under **Me → Connected Apps**.
 
-**Sensors show 0 but you've eaten** — FatSecret sometimes returns `{"food_entries": null}` for partially synced days. The add-on treats this as zero and picks up real data on the next poll.
+**Consumed shows 0 but you've eaten** — FatSecret sometimes returns `{"food_entries": null}` for partially synced days. The add-on treats this as zero and picks up real data on the next poll.
+
+**Burned shows yesterday's value all day** — This is correct behaviour. FatSecret receives the finalized Garmin summary after the day ends, so today's burned total builds up gradually as Garmin syncs to FatSecret throughout the day.
 
 ## Changelog
 
