@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.1] — 2026-07-03
+
+### Fixed
+- **Startup backfill now covers the full current month** — previously only the current week was checked, and only food entries were fetched. On startup the add-on now iterates every day from the 1st of the month up to (but not including) today, fetches missing food entries via `food_entries.get.v2`, and fetches missing burned calories via `exercise_entries.get`. Days that already have both complete are skipped
+
+---
+
 ## [2.4.0] — 2026-07-03
 
 ### Changed

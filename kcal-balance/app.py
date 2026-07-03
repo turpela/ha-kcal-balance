@@ -109,16 +109,53 @@ _users = []
 # ---------------------------------------------------------------------------
 
 def _poll_loop(users, supervisor_token, scan_interval):
-    # Backfill missing week days from FatSecret on startup (no burned data available)
-    today = today_local()
+    # ── Startup backfill ─────────────────────────────────────────────────────
+    # Fill in any missing food or burned data for all days from the start of
+    # the current month up to (but not including) today.  Today is always
+    # fetched fresh in the main poll loop.
+    #
+    # A day is considered incomplete if:
+    #   • it has no row yet (needs_food + needs_burned), or
+    #   • it has a food row but burned == 0/NULL (needs_burned only —
+    #     happens for days stored before v2.4.0 or before Garmin was connected)
+    #
+    # Skips days that already have both food and a positive burned value to
+    # avoid unnecessary API calls on every restart.
+    today  = today_local()
+    mstart = month_start(today)
+
+    backfill_dates = []
+    d = mstart
+    while d < today:
+        backfill_dates.append(d)
+        d += timedelta(days=1)
+
+    if backfill_dates:
+        log.info("Checking backfill for %d day(s) from %s…", len(backfill_dates), mstart)
+
     for user in users:
-        for d in week_dates(today):
-            if not store.has_day(user["label"], d.isoformat()):
-                log.info("[%s] Backfilling %s from FatSecret...", user["label"], d.isoformat())
+        for d in backfill_dates:
+            date_str     = d.isoformat()
+            row          = store.get_day(user["label"], date_str)
+            needs_food   = row is None
+            needs_burned = row is None or not (row.get("burned") or 0) > 0
+
+            if not needs_food and not needs_burned:
+                continue   # already complete — skip
+
+            if needs_food:
+                log.info("[%s] Backfilling food for %s", user["label"], date_str)
                 totals = fs.fetch_day(user["creds"], d)
                 if totals:
-                    store.upsert_day(user["label"], d.isoformat(), totals)
-                time.sleep(0.3)
+                    store.upsert_day(user["label"], date_str, totals)
+                time.sleep(0.5)
+
+            if needs_burned:
+                log.info("[%s] Backfilling burned for %s", user["label"], date_str)
+                burned = fs.fetch_burned(user["creds"], d)
+                if burned:
+                    store.update_burned(user["label"], date_str, burned)
+                time.sleep(0.5)
 
     log.info("Polling %d user(s) every %ds", len(users), scan_interval)
 
@@ -835,7 +872,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.4.0 starting...")
+    log.info("Kcal Balance v2.4.1 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
