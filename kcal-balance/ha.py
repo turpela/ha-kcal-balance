@@ -5,13 +5,10 @@ ha.py — Home Assistant Supervisor API helpers and sensor push logic.
 import json
 import logging
 import urllib.request
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 log = logging.getLogger("kcal-balance")
 
-HA_API    = "http://supervisor/core/api"
-_TIMEZONE = ZoneInfo("Europe/Helsinki")
+HA_API = "http://supervisor/core/api"
 
 
 # ---------------------------------------------------------------------------
@@ -19,14 +16,7 @@ _TIMEZONE = ZoneInfo("Europe/Helsinki")
 # ---------------------------------------------------------------------------
 
 def ha_get(supervisor_token, entity_id):
-    """
-    Read a HA sensor state.
-
-    Returns (value: float|None, sensor_date: date|None) where sensor_date is
-    the Helsinki-local date when the sensor value last changed.  Callers can
-    use sensor_date to detect whether the Garmin sensor is still showing
-    yesterday's final reading (last sync before midnight).
-    """
+    """Read a HA sensor state. Returns float or None on error/unavailable."""
     req = urllib.request.Request(
         f"{HA_API}/states/{entity_id}",
         headers={"Authorization": f"Bearer {supervisor_token}"},
@@ -36,23 +26,10 @@ def ha_get(supervisor_token, entity_id):
             data = json.loads(r.read())
             state = data.get("state", "")
             if state in ("unavailable", "unknown", ""):
-                return None, None
-            value = float(state)
-            # last_changed: when the state VALUE last changed (not just polled)
-            ts_str = data.get("last_changed") or data.get("last_updated")
-            sensor_date = _parse_date(ts_str) if ts_str else None
-            return value, sensor_date
+                return None
+            return float(state)
     except Exception as exc:
         log.warning("Could not read %s: %s", entity_id, exc)
-        return None, None
-
-
-def _parse_date(ts_str):
-    """Parse an ISO 8601 HA timestamp to a Helsinki local date."""
-    try:
-        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        return dt.astimezone(_TIMEZONE).date()
-    except Exception:
         return None
 
 
@@ -100,7 +77,7 @@ def push_sensors(supervisor_token, suffix, label,
         "carbs":    totals["carbs"],
     })
 
-    # --- net energy (Garmin burned − consumed) ---
+    # --- net energy (burned − consumed) ---
     if net is not None:
         ha_post(supervisor_token, f"sensor.kcal_{suffix}_net", net, {
             "unit_of_measurement": "kcal",

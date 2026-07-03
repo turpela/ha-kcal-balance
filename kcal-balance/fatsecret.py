@@ -81,6 +81,62 @@ def summarise(raw) -> dict:
     return {k: round(v, 1) for k, v in totals.items()}
 
 
+def fetch_burned(creds: dict, d: date):
+    """
+    Fetch Garmin-synced burned calories (TDEE) from the FatSecret exercise diary.
+
+    FatSecret receives a finalized daily summary from Garmin after the day ends
+    and stores it as a single exercise entry named "Garmin" with minutes=1440
+    (full 24-hour day).  This is the same value shown in the FatSecret app and
+    is always complete — no midnight-gap issue.
+
+    Returns float (kcal) or None if no Garmin data exists for this date.
+    """
+    auth = OAuth1(
+        creds["consumer_key"],
+        creds["consumer_secret"],
+        creds["access_token"],
+        creds["access_token_secret"],
+        signature_type="query",
+    )
+    try:
+        resp = requests.post(
+            FATSECRET_API,
+            params={
+                "method": "exercise_entries.get",
+                "date":   str(_epoch_days(d)),
+                "format": "json",
+            },
+            auth=auth,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        raw = resp.json()
+    except Exception as exc:
+        log.warning("FatSecret exercise fetch failed for %s: %s", d.isoformat(), exc)
+        return None
+
+    if not isinstance(raw, dict) or "error" in raw:
+        return None
+
+    entry = (raw.get("exercise_entries") or {}).get("exercise_entry")
+    if not entry:
+        return None
+    if isinstance(entry, dict):
+        entry = [entry]
+
+    # Garmin sends one full-day TDEE entry (1440 min = 24 h).
+    # Filter to that entry to avoid double-counting manually logged workouts
+    # which are already included in the Garmin TDEE total.
+    total = sum(
+        float(e.get("calories", 0))
+        for e in entry
+        if str(e.get("minutes", "")) == "1440"
+           or e.get("exercise_name", "").lower() == "garmin"
+    )
+    return round(total, 1) if total > 0 else None
+
+
 def fetch_day(creds: dict, d: date):
     """
     Convenience wrapper: fetch + summarise for one date.

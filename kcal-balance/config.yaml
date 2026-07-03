@@ -1,5 +1,5 @@
 name: "Kcal Balance"
-version: "2.3.1"
+version: "2.4.0"
 slug: "kcal_balance"
 description: "Calorie balance tracker with web dashboard — FatSecret + Garmin for two users"
 url: "https://github.com/turpela/ha-kcal-balance"
@@ -23,22 +23,18 @@ options:
   u1_consumer_secret: ""
   u1_access_token: ""
   u1_access_token_secret: ""
-  u1_garmin_entity: ""
   u2_consumer_key: ""
   u2_consumer_secret: ""
   u2_access_token: ""
   u2_access_token_secret: ""
-  u2_garmin_entity: ""
   scan_interval: 300
 schema:
   u1_consumer_key: str
   u1_consumer_secret: password
   u1_access_token: str
   u1_access_token_secret: password
-  u1_garmin_entity: str?
   u2_consumer_key: str?
   u2_consumer_secret: password?
   u2_access_token: str?
   u2_access_token_secret: password?
-  u2_garmin_entity: str?
   scan_interval: int

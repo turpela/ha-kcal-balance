@@ -45,9 +45,7 @@ log = logging.getLogger("kcal-balance")
 # ---------------------------------------------------------------------------
 OPTIONS_FILE   = "/data/options.json"
 TIMEZONE       = ZoneInfo("Europe/Helsinki")
-DEFAULT_GARMIN = {"U1": "sensor.garmin_connect_calories",
-                  "U2": "sensor.garmin_connect_calories_2"}
-DEFAULT_GDA    = 2000.0
+DEFAULT_GDA = 2000.0
 
 # ---------------------------------------------------------------------------
 # Date helpers
@@ -89,8 +87,6 @@ def build_user_list(opts):
                 "access_token":        _strip(opts.get(f"{prefix}access_token")),
                 "access_token_secret": _strip(opts.get(f"{prefix}access_token_secret")),
             },
-            "garmin_entity": _strip(opts.get(f"{prefix}garmin_entity"))
-                             or DEFAULT_GARMIN[label],
         }
 
     users = [_user("U1", "u1", "u1_")]
@@ -141,28 +137,11 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 if totals is None:
                     continue
 
-                # Garmin: burned calories + the date the sensor value last changed
-                burned, garmin_date = ha.ha_get(supervisor_token, user["garmin_entity"])
-
-                # ── Day-boundary carry-over ────────────────────────────────
-                # Garmin's last cloud sync before midnight may be 1–3 h early.
-                # After midnight the sensor still shows yesterday's final value
-                # until the integration fetches today's data.  Detect this by
-                # comparing the sensor's last_changed date to today:
-                #   • garmin_date == yesterday → sensor is stale; carry the
-                #     value to yesterday's DB record (MAX so we never go back),
-                #     then treat today's burned as unknown.
-                #   • garmin_date == today     → fresh data for today; use it.
-                #   • garmin_date == None      → can't tell; treat as today.
-                yesterday = today - timedelta(days=1)
-                if garmin_date is not None and garmin_date == yesterday:
-                    if store.has_day(label, yesterday.isoformat()):
-                        store.update_burned(label, yesterday.isoformat(), burned)
-                        log.debug(
-                            "[%s] Garmin carry-over: %.0f kcal saved to %s",
-                            label, burned, yesterday,
-                        )
-                    burned = None  # today's data not yet available from Garmin
+                # Burned calories: fetched directly from FatSecret exercise diary.
+                # FatSecret receives a finalized daily summary from Garmin after
+                # the day ends (exercise_entries.get, "Garmin" entry, 1440 min).
+                # This is always the complete day total — no midnight-gap issue.
+                burned = fs.fetch_burned(user["creds"], today)
 
                 # Persist food + burned for today
                 store.upsert_day(label, today_str, totals, burned=burned)
@@ -856,7 +835,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.3.1 starting...")
+    log.info("Kcal Balance v2.4.0 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:

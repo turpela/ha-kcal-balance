@@ -8,6 +8,21 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.0] — 2026-07-03
+
+### Changed
+- **Burned calories now sourced from FatSecret instead of the HA Garmin sensor** — FatSecret receives a finalized Garmin daily summary (exercise diary, `exercise_entries.get`, entry named "Garmin" with `minutes=1440`) after the day ends. This is always the complete 24-hour total; the midnight-gap problem is eliminated entirely
+- `fatsecret.py` — new `fetch_burned(creds, date)` function; filters for the full-day Garmin TDEE entry to avoid double-counting manually logged workouts
+- `ha.py` — reverted `ha_get()` to simple `float | None` return; date-aware tuple was only needed for the now-removed carry-over workaround
+- `config.yaml` bumped to `2.4.0`; removed `u1_garmin_entity` / `u2_garmin_entity` options — the HA Garmin Connect integration is no longer required
+
+### Removed
+- Day-boundary carry-over logic (`last_changed` timestamp detection) — superseded by the FatSecret exercise API approach
+- `store.update_burned()` is retained but the carry-over call site is gone; the function remains available for future use
+- `u1_garmin_entity` / `u2_garmin_entity` add-on config options
+
+---
+
 ## [2.3.1] — 2026-06-30
 
 ### Fixed
