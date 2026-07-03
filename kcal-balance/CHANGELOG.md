@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.2] — 2026-07-03
+
+### Fixed
+- **Startup backfill always re-fetches burned for past days** — previously the backfill skipped days where `burned > 0`, leaving stale values stored by older code (v2.3.x Garmin HA sensor) uncorrected. Now all past days in the month have their burned value refreshed from the FatSecret exercise API on startup; `update_burned` uses `MAX(new, existing)` so values can only increase, never decrease
+
+---
+
 ## [2.4.1] — 2026-07-03
 
 ### Fixed

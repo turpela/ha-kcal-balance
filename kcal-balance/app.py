@@ -135,13 +135,9 @@ def _poll_loop(users, supervisor_token, scan_interval):
 
     for user in users:
         for d in backfill_dates:
-            date_str     = d.isoformat()
-            row          = store.get_day(user["label"], date_str)
-            needs_food   = row is None
-            needs_burned = row is None or not (row.get("burned") or 0) > 0
-
-            if not needs_food and not needs_burned:
-                continue   # already complete — skip
+            date_str   = d.isoformat()
+            row        = store.get_day(user["label"], date_str)
+            needs_food = row is None
 
             if needs_food:
                 log.info("[%s] Backfilling food for %s", user["label"], date_str)
@@ -150,12 +146,16 @@ def _poll_loop(users, supervisor_token, scan_interval):
                     store.upsert_day(user["label"], date_str, totals)
                 time.sleep(0.5)
 
-            if needs_burned:
-                log.info("[%s] Backfilling burned for %s", user["label"], date_str)
-                burned = fs.fetch_burned(user["creds"], d)
-                if burned:
-                    store.update_burned(user["label"], date_str, burned)
-                time.sleep(0.5)
+            # Always re-fetch burned for past days — update_burned uses MAX so it
+            # only writes if the FatSecret value is higher than what's stored.
+            # This corrects values that were stored by older code (Garmin HA sensor)
+            # which may have been partial or lower than the finalized daily total.
+            log.debug("[%s] Refreshing burned for %s", user["label"], date_str)
+            burned = fs.fetch_burned(user["creds"], d)
+            if burned:
+                store.update_burned(user["label"], date_str, burned)
+                log.info("[%s] Burned updated for %s → %.0f kcal", user["label"], date_str, burned)
+            time.sleep(0.5)
 
     log.info("Polling %d user(s) every %ds", len(users), scan_interval)
 
@@ -872,7 +872,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.4.1 starting...")
+    log.info("Kcal Balance v2.4.2 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
