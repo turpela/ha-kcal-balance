@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.4] — 2026-07-03
+
+### Changed
+- Weekly and monthly macro rows now show **average per day** instead of totals — labels updated to "Protein avg/day", "Fat avg/day", "Carbs avg/day", divided by `days_tracked`
+
+---
+
 ## [2.4.3] — 2026-07-03
 
 ### Fixed

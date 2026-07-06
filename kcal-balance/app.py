@@ -656,9 +656,11 @@ async function loadWeek() {
               `GDA% (${td.days_elapsed ?? 1} day${(td.days_elapsed ?? 1) !== 1 ? 's' : ''})`,
               `<span style="color:${gdaColor(td.weekly_gda_pct)}">${fmt(td.weekly_gda_pct, 1)}%</span>`) : ''}
           ${metric('Days tracked', `${td.days_tracked ?? rows.length} / ${td.days_elapsed ?? 7}`)}
-          ${metric('Protein', `${fmt(td.weekly?.protein ?? 0)} g`)}
-          ${metric('Fat',     `${fmt(td.weekly?.fat ?? 0)} g`)}
-          ${metric('Carbs',   `${fmt(td.weekly?.carbs ?? 0)} g`)}
+          ${(()=>{ const n = td.days_tracked || 1;
+            return metric('Protein avg/day', `${fmt((td.weekly?.protein ?? 0) / n)} g`)
+                 + metric('Fat avg/day',     `${fmt((td.weekly?.fat ?? 0) / n)} g`)
+                 + metric('Carbs avg/day',   `${fmt((td.weekly?.carbs ?? 0) / n)} g`);
+          })()}
         </div>
       </div>`;
     }
@@ -714,9 +716,11 @@ async function loadMonth() {
           ${netRows.length ? metric('Deficit days', `<span class="green">${deficitDays}</span> / ${netRows.length}`) : ''}
           ${netRows.length ? metric('Surplus days', `<span class="red">${surplusDays}</span> / ${netRows.length}`) : ''}
           ${metric('Days tracked', `${td.monthly_days_tracked ?? rows.length}`)}
-          ${metric('Protein', `${fmt(td.monthly?.protein ?? 0)} g`)}
-          ${metric('Fat',     `${fmt(td.monthly?.fat ?? 0)} g`)}
-          ${metric('Carbs',   `${fmt(td.monthly?.carbs ?? 0)} g`)}
+          ${(()=>{ const n = td.monthly_days_tracked || 1;
+            return metric('Protein avg/day', `${fmt((td.monthly?.protein ?? 0) / n)} g`)
+                 + metric('Fat avg/day',     `${fmt((td.monthly?.fat ?? 0) / n)} g`)
+                 + metric('Carbs avg/day',   `${fmt((td.monthly?.carbs ?? 0) / n)} g`);
+          })()}
         </div>
       </div>`;
     }
@@ -883,7 +887,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.4.3 starting...")
+    log.info("Kcal Balance v2.4.4 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:

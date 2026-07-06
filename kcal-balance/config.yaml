@@ -1,5 +1,5 @@
 name: "Kcal Balance"
-version: "2.4.3"
+version: "2.4.4"
 slug: "kcal_balance"
 description: "Calorie balance tracker with web dashboard — FatSecret + Garmin for two users"
 url: "https://github.com/turpela/ha-kcal-balance"
