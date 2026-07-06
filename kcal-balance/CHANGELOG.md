@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.3] — 2026-07-03
+
+### Fixed
+- **Yesterday's burned calories now refresh automatically every poll cycle** — previously the finalized Garmin daily total from FatSecret was only picked up at startup. Now each poll also re-fetches yesterday's burned and applies it via `update_burned` (MAX logic, never decreases). No restart needed to get the previous day's final values
+
+---
+
 ## [2.4.2] — 2026-07-03
 
 ### Fixed

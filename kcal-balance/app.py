@@ -183,6 +183,17 @@ def _poll_loop(users, supervisor_token, scan_interval):
                 # Persist food + burned for today
                 store.upsert_day(label, today_str, totals, burned=burned)
 
+                # Refresh yesterday's burned on every poll — FatSecret receives the
+                # finalized Garmin daily summary after midnight, so the value keeps
+                # updating until it settles.  update_burned uses MAX so it never goes
+                # backward.
+                yesterday     = today - timedelta(days=1)
+                burned_yday   = fs.fetch_burned(user["creds"], yesterday)
+                if burned_yday:
+                    store.update_burned(label, yesterday.isoformat(), burned_yday)
+                    log.debug("[%s] Yesterday (%s) burned refreshed → %.0f kcal",
+                              label, yesterday.isoformat(), burned_yday)
+
                 # GDA from settings (editable in dashboard Settings tab)
                 gda     = float(store.get_setting(f"{suffix}_gda", DEFAULT_GDA))
                 gda_pct = round(totals["calories"] / gda * 100, 1) if gda > 0 else None
@@ -872,7 +883,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.4.2 starting...")
+    log.info("Kcal Balance v2.4.3 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
