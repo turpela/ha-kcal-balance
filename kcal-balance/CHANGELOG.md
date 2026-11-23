@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.5] — 2026-11-23
+
+### Added
+- **Last Week tab** — new tab between "This Week" and "This Month" showing the full previous Mon–Sun with the same net cal bar chart and summary (net cal, consumed, GDA%, days tracked, macro averages). Data served from new `/api/lastweek` endpoint
+
+---
+
 ## [2.4.4] — 2026-07-03
 
 ### Changed

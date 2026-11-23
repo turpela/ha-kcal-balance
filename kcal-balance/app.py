@@ -405,12 +405,14 @@ body {
 <div class="tabs">
   <button class="tab active" onclick="showTab('today',this)">Today</button>
   <button class="tab"        onclick="showTab('week',this)">This Week</button>
+  <button class="tab"        onclick="showTab('lastweek',this)">Last Week</button>
   <button class="tab"        onclick="showTab('month',this)">This Month</button>
   <button class="tab"        onclick="showTab('settings',this)">Settings</button>
 </div>
 
 <div id="today"    class="panel active"><div id="today-content"><div class="empty">Loading…</div></div></div>
 <div id="week"     class="panel"><div id="week-content"><div class="empty">Loading…</div></div></div>
+<div id="lastweek" class="panel"><div id="lastweek-content"><div class="empty">Loading…</div></div></div>
 <div id="month"    class="panel"><div id="month-content"><div class="empty">Loading…</div></div></div>
 <div id="settings" class="panel"><div id="settings-content"><div class="empty">Loading…</div></div></div>
 
@@ -491,13 +493,14 @@ async function saveName(el) {
 }
 
 /* ── Tabs ── */
-let weekLoaded = false, monthLoaded = false;
+let weekLoaded = false, lastWeekLoaded = false, monthLoaded = false;
 function showTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === name));
-  if (name === 'week'     && !weekLoaded)  { loadWeek();  weekLoaded  = true; }
-  if (name === 'month'    && !monthLoaded) { loadMonth(); monthLoaded = true; }
+  if (name === 'week'     && !weekLoaded)      { loadWeek();     weekLoaded     = true; }
+  if (name === 'lastweek' && !lastWeekLoaded)  { loadLastWeek(); lastWeekLoaded = true; }
+  if (name === 'month'    && !monthLoaded)     { loadMonth();    monthLoaded    = true; }
   if (name === 'settings') renderSettings();
 }
 
@@ -679,6 +682,78 @@ async function loadWeek() {
   }
 }
 
+/* ── Last Week ── */
+async function loadLastWeek() {
+  try {
+    const r = await fetch('api/lastweek');
+    const data = await r.json();
+
+    if (!Object.keys(data).length) {
+      document.getElementById('lastweek-content').innerHTML =
+        '<div class="empty">No data for last week</div>';
+      return;
+    }
+
+    let html = '';
+    for (const lbl of ['U1','U2']) {
+      const rows = data[lbl];
+      if (!rows || !rows.length) continue;
+
+      const gda = lbl === 'U1' ? (_settings.u1_gda || 2000) : (_settings.u2_gda || 2000);
+      const n   = rows.length;
+
+      // Compute totals from rows (no server snapshot for last week)
+      const consumed = rows.reduce((s, r) => s + (r.calories || 0), 0);
+      const protein  = rows.reduce((s, r) => s + (r.protein  || 0), 0);
+      const fat      = rows.reduce((s, r) => s + (r.fat      || 0), 0);
+      const carbs    = rows.reduce((s, r) => s + (r.carbs    || 0), 0);
+      const netRows  = rows.filter(r => (r.burned || 0) > 0);
+      const net      = netRows.length
+        ? +(netRows.reduce((s, r) => s + (r.burned - r.calories), 0)).toFixed(1)
+        : null;
+      const weekly_gda = gda * 7;
+      const gda_pct    = weekly_gda > 0 ? +(consumed / weekly_gda * 100).toFixed(1) : null;
+
+      // Date range label e.g. "Jun 29 – Jul 5"
+      const fmtD = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
+      const weekLabel = `${fmtD(rows[0].date)} – ${fmtD(rows[rows.length - 1].date)}`;
+
+      html += `<div class="user-block">
+        <div class="section-title">👤 ${editableName(lbl)} — ${weekLabel}</div>
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Daily Net Cal (burned − consumed)</div>
+          <canvas id="lwchart-${lbl}" height="110"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">Weekly Summary</div>
+          ${net != null ? metric('Net Cal',
+              `<span style="color:${netColor(net)}">${sign(net)} kcal</span>`) : ''}
+          ${metric('Consumed', `${fmt(consumed, 0)} kcal`)}
+          ${gda_pct != null ? metric('GDA% (7 days)',
+              `<span style="color:${gdaColor(gda_pct)}">${fmt(gda_pct, 1)}%</span>`) : ''}
+          ${metric('Days tracked', `${n} / 7`)}
+          ${metric('Protein avg/day', `${fmt(protein / n)} g`)}
+          ${metric('Fat avg/day',     `${fmt(fat / n)} g`)}
+          ${metric('Carbs avg/day',   `${fmt(carbs / n)} g`)}
+        </div>
+      </div>`;
+    }
+
+    document.getElementById('lastweek-content').innerHTML =
+      html || '<div class="empty">No data for last week</div>';
+
+    for (const lbl of ['U1','U2']) {
+      const rows = data[lbl];
+      if (!rows || !rows.length) continue;
+      buildNetChart(`lwchart-${lbl}`, rows, `lastweek-${lbl}`);
+    }
+  } catch(e) {
+    document.getElementById('lastweek-content').innerHTML =
+      '<div class="empty" style="color:var(--red)">Could not load last week data</div>';
+    console.error(e);
+  }
+}
+
 /* ── This Month ── */
 async function loadMonth() {
   try {
@@ -856,6 +931,20 @@ def api_week():
     return jsonify(result)
 
 
+@app.route("/api/lastweek")
+def api_lastweek():
+    today       = today_local()
+    monday      = week_monday(today)
+    last_monday = monday - timedelta(days=7)
+    last_sunday = monday - timedelta(days=1)
+    result = {}
+    for label in ["U1", "U2"]:
+        rows = store.get_range(label, last_monday.isoformat(), last_sunday.isoformat())
+        if rows:
+            result[label] = rows
+    return jsonify(result)
+
+
 @app.route("/api/month")
 def api_month():
     today = today_local()
@@ -887,7 +976,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.4.4 starting...")
+    log.info("Kcal Balance v2.4.5 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
