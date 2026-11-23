@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.6] — 2026-11-23
+
+### Fixed
+- **Yesterday's food diary now refreshed on every poll cycle** — previously only today's consumed calories were updated each interval, so food entries logged after midnight (but dated to the previous day in FatSecret) were missed until restart. Now each poll also re-fetches and upserts yesterday's food alongside yesterday's burned, correcting late-logged entries within one poll interval automatically
+
+---
+
 ## [2.4.5] — 2026-11-23
 
 ### Added
