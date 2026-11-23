@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.7] — 2026-11-23
+
+### Fixed
+- **Startup backfill now always re-fetches food for all past days in the month** — previously food was only fetched when the row was missing entirely, leaving days with partial or incorrect calories (e.g. entries logged after midnight for a previous date) uncorrected until manually fixed. Now every past day's food is re-fetched and upserted on startup; a log line is printed only when calories changed by more than 1 kcal
+
+---
+
 ## [2.4.6] — 2026-11-23
 
 ### Fixed

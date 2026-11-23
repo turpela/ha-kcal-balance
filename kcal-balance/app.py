@@ -135,27 +135,28 @@ def _poll_loop(users, supervisor_token, scan_interval):
 
     for user in users:
         for d in backfill_dates:
-            date_str   = d.isoformat()
-            row        = store.get_day(user["label"], date_str)
-            needs_food = row is None
+            date_str = d.isoformat()
 
-            if needs_food:
-                log.info("[%s] Backfilling food for %s", user["label"], date_str)
-                totals = fs.fetch_day(user["creds"], d)
-                if totals:
-                    store.upsert_day(user["label"], date_str, totals)
-                time.sleep(0.5)
+            # Always re-fetch food — corrects rows that were stored with partial data
+            # (e.g. entries logged in FatSecret after midnight but dated to the previous
+            # day) and fills in days with no row yet.
+            totals = fs.fetch_day(user["creds"], d)
+            if totals:
+                prev = store.get_day(user["label"], date_str)
+                store.upsert_day(user["label"], date_str, totals)
+                prev_cal = (prev or {}).get("calories", 0) or 0
+                if abs(totals["calories"] - prev_cal) > 1:
+                    log.info("[%s] Food updated for %s → %.0f kcal (was %.0f)",
+                             user["label"], date_str, totals["calories"], prev_cal)
+            time.sleep(0.3)
 
-            # Always re-fetch burned for past days — update_burned uses MAX so it
-            # only writes if the FatSecret value is higher than what's stored.
-            # This corrects values that were stored by older code (Garmin HA sensor)
-            # which may have been partial or lower than the finalized daily total.
-            log.debug("[%s] Refreshing burned for %s", user["label"], date_str)
+            # Always re-fetch burned — update_burned uses MAX so it only writes if
+            # the FatSecret value is higher than what's stored.
             burned = fs.fetch_burned(user["creds"], d)
             if burned:
                 store.update_burned(user["label"], date_str, burned)
                 log.info("[%s] Burned updated for %s → %.0f kcal", user["label"], date_str, burned)
-            time.sleep(0.5)
+            time.sleep(0.3)
 
     log.info("Polling %d user(s) every %ds", len(users), scan_interval)
 
@@ -985,7 +986,7 @@ def api_history():
 # ---------------------------------------------------------------------------
 
 def main():
-    log.info("Kcal Balance v2.4.6 starting...")
+    log.info("Kcal Balance v2.4.7 starting...")
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
